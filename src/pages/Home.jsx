@@ -1,19 +1,8 @@
-import { useEffect, useRef } from "react";
-import fujiSakura from "../images/fuji-sakura.jpg";
-import fujiPagoda from "../images/fuji-pagoda-snow.jpg";
-import fujiSunset from "../images/fuji-lake-sunset.jpg";
-
 const JP = {
   fontFamily: '"Be Vietnam Pro","Noto Sans JP","Hiragino Sans","Yu Gothic","Meiryo",system-ui,sans-serif',
 };
 
 const cx = (...a) => a.filter(Boolean).join(" ");
-
-const BG = [
-  { src: fujiSakura, cls: "kb-1", alt: "Núi Phú Sĩ và hoa anh đào" },
-  { src: fujiPagoda, cls: "kb-2", alt: "Chùa đỏ dưới chân núi Phú Sĩ mùa tuyết" },
-  { src: fujiSunset, cls: "kb-3", alt: "Hồ gần núi Phú Sĩ lúc hoàng hôn" },
-];
 
 const FEATURES = [
   { icon: "あ", title: "Bảng chữ cái", desc: "Hiragana & Katakana — nghe, nhận diện, gõ romaji", tab: "kana" },
@@ -29,62 +18,11 @@ const STEPS = [
 ];
 
 function ScrollBackground() {
-  const wrapRef = useRef(null);
-  const layerRefs = useRef([]);
-
-  useEffect(() => {
-    let raf = 0;
-    const update = () => {
-      raf = 0;
-      const wrap = wrapRef.current;
-      if (!wrap) return;
-      const rect = wrap.getBoundingClientRect();
-      const total = rect.height - window.innerHeight;
-      const p = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 0;
-      const n = BG.length;
-      const pos = p * (n - 1);
-      layerRefs.current.forEach((el, i) => {
-        if (!el) return;
-        const d = Math.abs(pos - i);
-        el.style.opacity = String(Math.max(0, 1 - d));
-      });
-    };
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(update);
-    };
-    update();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, []);
-
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none fixed inset-0 z-0 select-none overflow-hidden bg-stone-100"
-    >
-      {BG.map((b, i) => (
-        <div
-          key={b.src}
-          ref={(el) => (layerRefs.current[i] = el)}
-          className="absolute inset-0 transition-opacity duration-200 ease-out"
-          style={{ opacity: i === 0 ? 1 : 0 }}
-        >
-          <img
-            src={b.src}
-            alt=""
-            draggable={false}
-            className={cx("h-full w-full object-cover", b.cls)}
-          />
-        </div>
-      ))}
-      {/* Lớp phủ để chữ dễ đọc + gradient chuyển nhẹ dần xuống đáy trang */}
-      <div className="absolute inset-0 bg-gradient-to-b from-stone-50/85 via-stone-50/75 to-stone-50/95" />
-    </div>
+      className="pointer-events-none fixed inset-0 z-0 select-none bg-gradient-to-b from-stone-50 to-stone-100"
+    />
   );
 }
 
