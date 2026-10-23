@@ -1,0 +1,2468 @@
+import { useState, useMemo, useRef, useEffect } from "react";
+
+const GROUPS = [
+  {
+    id: "basic", name: "Cơ bản", cols: 5,
+    k: "あ い う え お か き く け こ さ し す せ そ た ち つ て と な に ぬ ね の は ひ ふ へ ほ ま み む め も や _ ゆ _ よ ら り る れ ろ わ _ ん _ を",
+    r: "a i u e o ka ki ku ke ko sa shi su se so ta chi tsu te to na ni nu ne no ha hi fu he ho ma mi mu me mo ya _ yu _ yo ra ri ru re ro wa _ n _ wo",
+  },
+  {
+    id: "dakuten", name: "Âm đục", cols: 5,
+    k: "が ぎ ぐ げ ご ざ じ ず ぜ ぞ だ ぢ づ で ど ば び ぶ べ ぼ ぱ ぴ ぷ ぺ ぽ",
+    r: "ga gi gu ge go za ji zu ze zo da ji zu de do ba bi bu be bo pa pi pu pe po",
+  },
+  {
+    id: "yoon", name: "Âm ghép", cols: 3,
+    k: "きゃ きゅ きょ しゃ しゅ しょ ちゃ ちゅ ちょ にゃ にゅ にょ ひゃ ひゅ ひょ みゃ みゅ みょ りゃ りゅ りょ ぎゃ ぎゅ ぎょ じゃ じゅ じょ びゃ びゅ びょ ぴゃ ぴゅ ぴょ",
+    r: "kya kyu kyo sha shu sho cha chu cho nya nyu nyo hya hyu hyo mya myu myo rya ryu ryo gya gyu gyo ja ju jo bya byu byo pya pyu pyo",
+  },
+];
+const SCRIPTS = { hira: "Hiragana", kata: "Katakana" };
+const ALIAS = {
+  shi: ["si"], chi: ["ti"], tsu: ["tu"], fu: ["hu"], ji: ["zi", "di"], zu: ["du"], wo: ["o"],
+  ja: ["jya", "zya"], ju: ["jyu", "zyu"], jo: ["jyo", "zyo"],
+  sha: ["sya"], shu: ["syu"], sho: ["syo"], cha: ["tya"], chu: ["tyu"], cho: ["tyo"],
+};
+
+const toKata = (s) =>
+  [...s].map((c) => { const n = c.charCodeAt(0); return n >= 0x3041 && n <= 0x3096 ? String.fromCharCode(n + 0x60) : c; }).join("");
+
+const cellsOf = (g, s) => {
+  const k = g.k.split(" "), r = g.r.split(" ");
+  return k.map((c, i) => (c === "_" ? null : { id: `${s}-${g.id}-${i}`, k: s === "kata" ? toKata(c) : c, r: r[i], s, g: g.id }));
+};
+
+const shuffle = (a) => {
+  const r = [...a];
+  for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; }
+  return r;
+};
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+
+function speak(text) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  const synth = window.speechSynthesis;
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "ja-JP";
+  u.rate = 0.8;
+  const v = synth.getVoices().find((x) => x.lang.replace("_", "-").startsWith("ja"));
+  if (v) u.voice = v;
+  synth.speak(u);
+}
+
+const JP = {
+  fontFamily: '"Be Vietnam Pro","Noto Sans JP","Hiragino Sans","Yu Gothic","Meiryo",system-ui,sans-serif',
+};
+
+const cx = (...a) => a.filter(Boolean).join(" ");
+
+const BTN = {
+  primary:
+    "w-full rounded-xl bg-red-700 px-4 py-3.5 text-base font-semibold text-white shadow-sm transition duration-150 hover:bg-red-800 active:scale-[0.99]",
+  ghost:
+    "rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm font-medium text-stone-700 transition duration-150 hover:bg-stone-50 active:bg-stone-100",
+  answer:
+    "flex min-h-[56px] w-full items-center justify-center gap-2 rounded-xl border px-3 py-3 text-center font-medium transition duration-150 active:scale-[0.99]",
+};
+
+function PageHeader({ title, desc, count }) {
+  return (
+    <header className="mb-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold leading-tight tracking-tight text-stone-900 sm:text-2xl">
+            {title}
+          </h1>
+          {desc && <p className="mt-1 text-sm leading-snug text-stone-600">{desc}</p>}
+        </div>
+        {count != null && (
+          <span className="shrink-0 rounded-full border border-red-100 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+            {count}
+          </span>
+        )}
+      </div>
+    </header>
+  );
+}
+
+function ChipRow({ label, children, className }) {
+  return (
+    <div className={cx("mb-3", className)}>
+      {label && (
+        <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-stone-500">
+          {label}
+        </div>
+      )}
+      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 sm:-mx-6 sm:px-6">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Chip({ active, onClick, children, title }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-pressed={!!active}
+      onClick={onClick}
+      className={cx(
+        "shrink-0 rounded-full border px-4 py-2.5 text-sm font-medium transition duration-150 active:scale-[0.98]",
+        active
+          ? "border-red-700 bg-red-700 text-white shadow-sm"
+          : "border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Segmented({ items, value, onChange, className }) {
+  return (
+    <div
+      className={cx("grid gap-1 rounded-xl bg-stone-200/70 p-1", className)}
+      style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0,1fr))` }}
+      role="tablist"
+    >
+      {items.map(([k, l]) => (
+        <button
+          key={k}
+          type="button"
+          role="tab"
+          aria-selected={value === k}
+          onClick={() => onChange(k)}
+          className={cx(
+            "min-h-10 rounded-lg px-1 py-2 text-center text-[13px] leading-tight transition duration-150 sm:text-sm",
+            value === k
+              ? "bg-white font-semibold text-red-700 shadow-sm"
+              : "font-medium text-stone-600 hover:text-stone-900"
+          )}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Panel({ children, className }) {
+  return (
+    <div className={cx("rounded-2xl border border-stone-200 bg-white shadow-sm", className)}>
+      {children}
+    </div>
+  );
+}
+
+function ProgressHeader({ ok, n, round = 10 }) {
+  const idx = n === 0 ? 1 : ((n - 1) % round) + 1;
+  const pct = n === 0 ? 0 : Math.round((idx / round) * 100);
+  return (
+    <div className="mb-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm text-stone-600">
+          Câu <b className="font-semibold text-stone-900">{idx}</b>
+          <span className="text-stone-400">/{round}</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-semibold text-stone-700">
+          <span className="text-emerald-600">✓</span> Đúng {ok}/{n}
+        </span>
+      </div>
+      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-stone-200">
+        <div
+          className="h-full rounded-full bg-red-700 transition-[width] duration-300"
+          style={{ width: pct + "%" }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Feedback({ ok, children, footer }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+  }, []);
+  return (
+    <div ref={ref}>
+      <div
+        role="status"
+        className={cx(
+          "flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-sm font-medium leading-snug",
+          ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-800"
+        )}
+      >
+        <span
+          aria-hidden="true"
+          className={cx(
+            "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white",
+            ok ? "bg-emerald-600" : "bg-red-500"
+          )}
+        >
+          {ok ? "✓" : "✕"}
+        </span>
+        <div className="min-w-0 break-words">{children}</div>
+      </div>
+      {footer}
+    </div>
+  );
+}
+
+function KanaSection() {
+  const [scripts, setScripts] = useState(["hira"]);
+  const [groups, setGroups] = useState(["basic"]);
+  const [mode, setMode] = useState("chart");
+
+  const toggle = (arr, set, v) => {
+    const n = arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
+    if (n.length) set(n);
+  };
+
+  const pool = useMemo(
+    () => scripts.flatMap((s) => GROUPS.filter((g) => groups.includes(g.id)).flatMap((g) => cellsOf(g, s).filter(Boolean))),
+    [scripts, groups]
+  );
+  const key = scripts.join() + groups.join();
+
+  return (
+    <div style={JP}>
+      <PageHeader
+        title="Học bảng chữ cái tiếng Nhật"
+        desc="Hiragana & Katakana — nghe, nhận diện và gõ romaji"
+        count={`${pool.length} chữ`}
+      />
+
+      <ChipRow label="Loại chữ">
+        {Object.entries(SCRIPTS).map(([id, n]) => (
+          <Chip key={id} active={scripts.includes(id)} onClick={() => toggle(scripts, setScripts, id)}>
+            {n}
+          </Chip>
+        ))}
+      </ChipRow>
+
+      <ChipRow label="Nhóm âm">
+        {GROUPS.map((g) => (
+          <Chip key={g.id} active={groups.includes(g.id)} onClick={() => toggle(groups, setGroups, g.id)}>
+            {g.name}
+          </Chip>
+        ))}
+      </ChipRow>
+
+      <Segmented
+        className="mb-5"
+        items={[
+          ["chart", "Bảng chữ"],
+          ["quiz", "Trắc nghiệm"],
+          ["type", "Gõ romaji"],
+        ]}
+        value={mode}
+        onChange={setMode}
+      />
+
+      {mode === "chart" && <Chart scripts={scripts} groups={groups} />}
+      {mode === "quiz" && <Quiz key={key} pool={pool} />}
+      {mode === "type" && <TypeIn key={key} pool={pool} />}
+    </div>
+  );
+}
+
+function Chart({ scripts, groups }) {
+  const [hideR, setHideR] = useState(false);
+  const [shown, setShown] = useState({});
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <button
+          type="button"
+          onClick={() => { setHideR(!hideR); setShown({}); }}
+          aria-pressed={hideR}
+          className={cx(BTN.ghost, hideR && "border-red-200 bg-red-50 text-red-700 hover:bg-red-100")}
+        >
+          {hideR ? "Hiện romaji" : "Ẩn romaji (tự kiểm tra)"}
+        </button>
+        <span className="text-xs text-stone-500">Chạm ô chữ để nghe phát âm</span>
+      </div>
+
+      {scripts.map((s) =>
+        GROUPS.filter((g) => groups.includes(g.id)).map((g) => {
+          const cells = cellsOf(g, s);
+          return (
+            <section key={s + g.id}>
+              <div className="mb-2 flex items-baseline justify-between gap-2">
+                <h2 className="text-sm font-semibold text-stone-800">
+                  {SCRIPTS[s]} · {g.name}
+                </h2>
+                <span className="text-xs text-stone-400">{cells.filter(Boolean).length} chữ</span>
+              </div>
+              <div
+                className="grid gap-1.5 sm:gap-2"
+                style={{
+                  gridTemplateColumns:
+                    g.cols === 3
+                      ? "repeat(auto-fill, minmax(76px, 1fr))"
+                      : `repeat(${g.cols}, minmax(0, 1fr))`,
+                }}
+              >
+                {cells.map((c, i) =>
+                  c ? (
+                    <button
+                      key={c.id}
+                      type="button"
+                      aria-label={`${c.k} ${c.r}`}
+                      onClick={() => { speak(c.k); setShown((x) => ({ ...x, [c.id]: true })); }}
+                      className="flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-xl border border-stone-200 bg-white px-1 py-2 shadow-sm transition duration-150 hover:border-red-200 hover:bg-red-50/60 active:scale-[0.97] active:bg-red-50"
+                    >
+                      <span className="text-xl font-medium leading-none text-stone-900 sm:text-2xl" style={JP}>
+                        {c.k}
+                      </span>
+                      <span
+                        className={cx(
+                          "h-3.5 text-[10px] font-medium leading-none sm:text-[11px]",
+                          hideR && !shown[c.id] ? "text-stone-300" : "text-stone-500"
+                        )}
+                      >
+                        {hideR && !shown[c.id] ? "?" : c.r}
+                      </span>
+                    </button>
+                  ) : (
+                    <div key={i} />
+                  )
+                )}
+              </div>
+            </section>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+function makeQ(pool, dir) {
+  const d = dir === "mix" ? pick(["k2r", "r2k"]) : dir;
+  const a = pick(pool);
+  const others = shuffle(pool.filter((x) => x.r !== a.r && x.k !== a.k)).slice(0, 3);
+  return { a, opts: shuffle([a, ...others]), dir: d };
+}
+
+function Quiz({ pool }) {
+  const [dir, setDir] = useState("k2r");
+  const [q, setQ] = useState(() => makeQ(pool, "k2r"));
+  const [sel, setSel] = useState(null);
+  const [sc, setSc] = useState({ ok: 0, n: 0 });
+  const k2r = q.dir === "k2r";
+  const next = (d = dir) => { setQ(makeQ(pool, d)); setSel(null); };
+  const choose = (o) => {
+    if (sel) return;
+    setSel(o);
+    setSc((s) => ({ ok: s.ok + (o.id === q.a.id ? 1 : 0), n: s.n + 1 }));
+    speak(q.a.k);
+  };
+  if (pool.length < 4)
+    return (
+      <Panel className="p-4 text-sm text-stone-600">
+        Cần ít nhất 4 chữ — hãy chọn thêm loại chữ hoặc nhóm âm.
+      </Panel>
+    );
+  const ok = sel && sel.id === q.a.id;
+  return (
+    <div>
+      <ProgressHeader ok={sc.ok} n={sc.n} />
+
+      <ChipRow className="mb-3">
+        {[["k2r", "Chữ → Romaji"], ["r2k", "Romaji → Chữ"], ["mix", "Trộn cả hai"]].map(([d, l]) => (
+          <Chip key={d} active={dir === d} onClick={() => { setDir(d); next(d); }}>
+            {l}
+          </Chip>
+        ))}
+      </ChipRow>
+
+      <Panel className="mb-3 px-4 py-7 text-center">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+          {k2r ? "Chữ nào được đọc là…" : "Romaji nào là chữ này…"}
+        </div>
+        <div className="mt-2 break-words text-6xl font-bold leading-tight text-stone-900 sm:text-7xl" style={JP}>
+          {k2r ? q.a.k : q.a.r}
+        </div>
+      </Panel>
+
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        {q.opts.map((o) => {
+          const right = o.id === q.a.id;
+          let cls = "border-stone-200 bg-white text-stone-900 hover:border-stone-300 hover:bg-stone-50";
+          if (sel) {
+            if (right) cls = "border-emerald-500 bg-emerald-50 text-emerald-800";
+            else if (sel.id === o.id) cls = "border-red-400 bg-red-50 text-red-800";
+            else cls = "border-stone-200 bg-white text-stone-900 opacity-55";
+          }
+          return (
+            <button
+              key={o.id}
+              type="button"
+              disabled={!!sel}
+              aria-pressed={sel ? sel.id === o.id : undefined}
+              onClick={() => choose(o)}
+              className={cx(BTN.answer, cls)}
+            >
+              {right && sel && <span className="text-sm font-bold text-emerald-600">✓</span>}
+              {sel && !right && sel.id === o.id && (
+                <span className="text-sm font-bold text-red-500">✕</span>
+              )}
+              <span className={k2r ? "text-lg sm:text-xl" : "text-3xl sm:text-4xl"} style={k2r ? undefined : JP}>
+                {k2r ? o.r : o.k}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {sel && (
+        <Feedback
+          ok={ok}
+          footer={
+            <button type="button" onClick={() => next()} className={cx(BTN.primary, "mt-3")}>
+              Câu tiếp theo →
+            </button>
+          }
+        >
+          {ok ? (
+            <>Chính xác — <b>{k2r ? q.a.r : q.a.k}</b></>
+          ) : (
+            <>Chưa đúng — đáp án đúng: <b>{k2r ? q.a.r : q.a.k}</b></>
+          )}
+        </Feedback>
+      )}
+    </div>
+  );
+}
+
+function TypeIn({ pool }) {
+  const [cur, setCur] = useState(() => pick(pool));
+  const [val, setVal] = useState("");
+  const [res, setRes] = useState(null);
+  const [sc, setSc] = useState({ ok: 0, n: 0 });
+  const inputRef = useRef(null);
+  const submit = () => {
+    if (res !== null) { setCur(pick(pool)); setVal(""); setRes(null); inputRef.current && inputRef.current.focus(); return; }
+    const v = val.trim().toLowerCase();
+    if (!v) return;
+    const ok = [cur.r, ...(ALIAS[cur.r] || [])].includes(v);
+    setRes(ok);
+    setSc((s) => ({ ok: s.ok + (ok ? 1 : 0), n: s.n + 1 }));
+    speak(cur.k);
+  };
+  const focusInput = () => {
+    const el = inputRef.current;
+    if (el) { el.focus(); el.scrollIntoView({ block: "center", behavior: "smooth" }); }
+  };
+  return (
+    <div>
+      <ProgressHeader ok={sc.ok} n={sc.n} />
+
+      <Panel
+        className={cx(
+          "mb-3 border-2 px-4 py-6 text-center",
+          res === null ? "border-stone-200" : res ? "border-emerald-400" : "border-red-400"
+        )}
+      >
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+          Gõ romaji cho chữ này
+        </div>
+        <div className="mt-1 break-words text-6xl font-bold leading-tight text-stone-900 sm:text-7xl" style={JP}>
+          {cur.k}
+        </div>
+      </Panel>
+
+      <input
+        ref={inputRef}
+        autoFocus
+        value={val}
+        readOnly={res !== null}
+        onChange={(e) => setVal(e.target.value)}
+        onFocus={focusInput}
+        onKeyDown={(e) => e.key === "Enter" && submit()}
+        placeholder="Gõ romaji rồi nhấn Enter…"
+        aria-label="Nhập romaji"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
+        enterKeyHint="done"
+        className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3.5 text-center text-lg text-stone-900 placeholder:text-sm placeholder:text-stone-400 focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100"
+      />
+
+      {res === null ? (
+        <button type="button" onClick={submit} className={cx(BTN.primary, "mt-3")}>
+          Kiểm tra
+        </button>
+      ) : (
+        <Feedback
+          ok={res}
+          footer={
+            <button type="button" onClick={submit} className={cx(BTN.primary, "mt-3")}>
+              Chữ tiếp theo →
+            </button>
+          }
+        >
+          {res ? (
+            <>Chính xác — <b>{cur.r}</b></>
+          ) : (
+            <>Chưa đúng — đáp án: <b>{cur.r}</b></>
+          )}
+        </Feedback>
+      )}
+      <p className="mt-2 text-center text-xs text-stone-500">
+        Trên máy tính: nhấn Enter để kiểm tra nhanh
+      </p>
+    </div>
+  );
+}
+
+// ================= HÁN TỰ =================
+// ---- Đọc âm Hán tự: romaji → hiragana rồi phát âm ----
+const ROM = (() => {
+  const m = { a: "あ", i: "い", u: "う", e: "え", o: "お", n: "ん" };
+  const rows = { k: "かきくけこ", s: "さしすせそ", t: "たちつてと", n: "なにぬねの", h: "はひふへほ", m: "まみむめも", r: "らりるれろ", g: "がぎぐげご", z: "ざじずぜぞ", d: "だぢづでど", b: "ばびぶべぼ", p: "ぱぴぷぺぽ" };
+  Object.entries(rows).forEach(([c, ks]) => [..."aiueo"].forEach((v, i) => (m[c + v] = ks[i])));
+  Object.assign(m, { ya: "や", yu: "ゆ", yo: "よ", wa: "わ", wo: "を", shi: "し", chi: "ち", tsu: "つ", fu: "ふ", ji: "じ", sha: "しゃ", shu: "しゅ", sho: "しょ", cha: "ちゃ", chu: "ちゅ", cho: "ちょ", ja: "じゃ", ju: "じゅ", jo: "じょ" });
+  const small = { a: "ゃ", u: "ゅ", o: "ょ" };
+  Object.entries({ ky: "き", ny: "に", hy: "ひ", my: "み", ry: "り", gy: "ぎ", by: "び", py: "ぴ" }).forEach(([c, b]) => [..."auo"].forEach((v) => (m[c + v] = b + small[v])));
+  return m;
+})();
+function romToKana(raw, isOn) {
+  if (/[ぁ-んァ-ヴ]/.test(raw)) return raw.replace(/[.\s()]/g, "");
+  let s = raw.replace(/[()\s.'\-]/g, "");
+  if (isOn) s = s.replace(/OO/g, "OU").replace(/EE/g, "EI");
+  s = s.toLowerCase();
+  let out = "", i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    if (c === s[i + 1] && !"aiueon".includes(c)) { out += "っ"; i++; continue; }
+    const t3 = ROM[s.slice(i, i + 3)], t2 = ROM[s.slice(i, i + 2)];
+    if (t3 && s.length - i >= 3) { out += t3; i += 3; }
+    else if (t2 && s.length - i >= 2) { out += t2; i += 2; }
+    else { out += ROM[c] || ""; i++; }
+  }
+  return out;
+}
+const toks = (s) => (s ? s.split(/\s*[,;、]\s*/).filter(Boolean) : []);
+const kanjiSay = (w) => {
+  const kun = toks(w.kun).map((t) => romToKana(t, false)).filter(Boolean).sort((a, b) => b.length - a.length);
+  if (kun.length) return kun[0];
+  return toks(w.on).map((t) => romToKana(t, true)).filter(Boolean)[0] || "";
+};
+function KSpeak({ w, lg }) {
+  const t = kanjiSay(w);
+  if (!t) return null;
+  return (
+    <button type="button" title="Nghe phát âm" aria-label="Nghe phát âm"
+      onClick={(e) => { e.stopPropagation(); speak(t); }}
+      className={`flex items-center justify-center rounded-full border border-stone-300 bg-white transition duration-150 hover:border-red-200 hover:bg-red-50 active:scale-95 ${lg ? "w-12 h-12 text-2xl" : "w-9 h-9 text-base"}`}>🔊</button>
+  );
+}
+
+// [kanji, Hán Việt, nghĩa, cách nhớ, âm On, âm Kun, là bộ thủ?]
+const RAW = [["一","NHẤT","một, đồng nhất, nhất định","gạch ngang 1 nét duy NHẤT","ICHI, ITSU","hito, hito(tsu)",1],["丶","CHỦ","điểm, chấm ,chủ để","dấu huyền","","",1],["〡","CỔN","nét sổ","như cây gậy cắm thẳng","","",1],["丿","PHIỆT","nét sổ xiên qua trái","chữ NO tiếng Nhật, hoặc giống mặt trăng khuyết","","",1],["乙","ẤT","can Ất","Ất là số 2 乙","OTSU","",1],["亅","QUYẾT","nét sổ có móc","như chữ J","","",1],["二","NHỊ","hai, số hai","gạch ngang 2 nét","NI","futa, futa(tsu)",1],["亠","ĐẦU","(giống như cái đầu người chứ không có nghĩa gì)","Đầu người ở trên vai","","",1],["人 (亻)","NHÂN( NHÂN ĐỨNG)","người","giống hình người đang đi có hai cái chân xoạc ra","","",1],["儿","NHI","Trẻ con , chân đứa trẻ con","giống hình đôi chân của đứa trẻ con đang chạy đi chơi","","",1],["入","NHẬP","nhập cảnh, nhập môn, nhập viện","Bồ Tát có chòm tóc trên đầu thì gọi là Bồ Tát NHẬP thế. Còn không có tóc thì là xuất thế","NYUU","i(ru), i(reru), hai (ru)",1],["八","BÁT","tám, số tám","giống hình 2 bàn chân , chân đi chữ bát","HACHI","ya, ya(tsu), yat (tsu), yoo",1],["冂","QUYNH","vùng biên giới xa; hoang địa","đứng ở BIÊN GIỚI thì có thể nhìn cả 3 mặt, trừ sau lưng không nhìn dc","","",1],["冖","MỊCH","trùm khăn lên","như hình cái khăn trải ra","","",1],["几","KỶ","ghế","giống hình cái ghế đẩu , chỉ có chân ghế và mặt ghế(không có cái dựa đằng sau","","",1],["冫","BĂNG","nước đá","giống như hình giọt nước bắn tung tóe khi dùng gậy gõ vào cột băng","","",1],["刀(刂)","ĐAO","con dao, cây đao (vũ khí)","dùng đao cắt cụt chữ カ","","",1],["凵","KHẢM","há miệng","giống hình cái miệng khi há ra, ngửa mặt lên trời","","",1],["力","LỰC","sức lực","Đại Ka カ (ka trong bảng katakana) phải có Lực 力","RYOKU, RIKI","chikara",1],["勹","BAO","bao bọc","hình cánh tay phải co quắp lại để BAO bọc cho vật gì kẹp dưới nách","","",1],["匕","CHUỶ","cái thìa (cái muỗng)","ヒvọng Chủy hy có đc cái giá múc canh khi ăn lẩu","","",1],["匚","PHƯƠNG","tủ đựng","như cái tủ đựng đồ","","",1],["匚","HỆ","tủ đựng","cho đồ vào TỦ匚 để GIẤU đi","","",1],["十","THẬP","mười","hội chữ thập đỏ","JUU, JIQ","too, to",1],["卜","BỐC","xem bói","xem bói dáng đái bậy để biết tương lai","","",1],["卩","TIẾT","đốt tre","giống hình một đốt trên thân cây tre","","",1],["厂","HÁN","sườn núi, vách đá","vẽ hình vách đá. Nét 一 là trên đỉnh vách đá, bằng phẳng đứng được, nét 丿 là vách đá thoai thoải.","","",1],["厶","KHƯ, TƯ","riêng tư","Số 4 tượng trưng cho sự RIÊNG TƯ","","",1],["口","KHẨU","miệng, nhân khẩu, khẩu ngữ","như cái miệng đang há to","KOO, KU","kuchi",1],["又","HỰU","lại","vừa trừ( -) LẠI vừa nhân( X)","","mata",1],["囗","VI","vây quanh","chu VI của HÌNH VUÔNG","","",1],["土","THỔ","thổ địa, thổ công","土 十 Đất là nơi cắm cây thập giá","DO, TO","tsuchi",1],["夂","TRUY","truy đuổi, đi phía sau","Chữ クchống gậy là do bị TRUY đuổi 夂","","",1],["士","SĨ","chiến sĩ, sĩ tử, bác sĩ","Kẻ SĨ học một (一) biết 1(十)","SHI","",1],["夊","TUY","đi chậm","bị túm tóc thì chỉ có thể ĐI CHẬM chứ không chạy được bị mẹ đánh dấu X là đi chậm, rồi lại bị ba cầm gậy ノ phang vào người vì tội chậm quá","","",1],["夕","TỊCH","tịch dương","Buổi CHIỀU mà đã có trăng 月 mọc nghiêng nghiêng","SEKI","yuu",1],["大","ĐẠI","to lớn, đại dương, đại lục","giống người giang 2 tay 2 chân cho thật to","DAI, TAI","oo, oo(kii), oo (ini)",1],["女","NỮ","phụ nữ","kuく teて くて Phụ nữ thì ~ dễ thương","JO, NYO, NYOO","onna, me",1],["子","TỬ","tử tôn, phần tử, phân tử, nguyên tử","Hình 1 em bé đang dang hai tay ra","SHI, SU","ko",1],["寸","THỐN","thước đo","10 (十 )chấm 丶 ( vạch trên thước) bằng 1 thốn (1 cm)","SUN","",1],["宀","MIÊN","mái nhà, mái che","giống như cái mái đình có cái chóp cao ở trên","","",1],["尢","UÔNG","yếu đuối","người to 大 bị gãy 1 chân nên yếu đuối","","",1],["小","TIỂU","nhỏ, ít","thằng người kẹp tay xuống","SHOO","chii(sai), ko, o",1],["尸","THI","xác chết, thây ma","đứng trên đống XÁC CHẾT quân giặc và phất cờ 尸 ăn mừng chiến thắng","","",1],["屮","TRIỆT","mầm non, cỏ non mới mọc","giống hình cây non 2 lá mầm với một ngọn nhú lên và một cái rễ cọc ở dưới","","",1],["山","SƠN","núi, sơn hà","3 cây chụm lại nên hòn núi cao.","SAN","yama",1],["巛","XUYÊN","sông ngòi","vẽ hình dòng nước chảy của con sông, gồm 3 nét chảy uốn éo","","",1],["工","CÔNG","công tác, công nhân","giống hình cái RULO cuộn dây điện dùng trong CÔNG NGHIỆP","KOO, KU","",1],["己","KỶ","tự kỉ, vị kỉ","Vì mày ích kỷ nên bị phạt quỳ gối (hình tượng người đang quỳ gối)","KO, KI","onore",1],["干","CAN","khô","Cây cột điẹn đứng khô khan giữa trời(giống hình cây cột điện)","KAN","ho(su), hi(ru)",1],["巾","CÂN","cái khăn","hình người với cái đầu nhô lên, đang đeo cái khăn dài lượt thượt xuống 2 bên","","",1],["广","NGHIỄM","mái nhà","MÁI丶 NHÀ trên NÚI厂","","",1],["幺","YÊU","nhỏ nhắn","Tôi YÊU những con số NHỎ < hơn số BỐN 4厶","","",1],["廴","DẪN","bước dài","廴 3 dang chân dẫn cả đoàn bước đi.","","",1],["廾","CỦNG","chắp tay","phiệt丿 十lần. chắp tay 1 Hoặc giống như 2 bàn tay chắp song song với nhau, kẹp thêm 1 que hương nằm ngang","","",1],["弋","DẶC","bắn, chiếm lấy","giống hình thằng người đang ném lao để chiếm lấy cái gì: nét 一 là cánh tay dang ra cầm lao 丶, còn nét chéo là hình người đang chạy lấy đà nghiêng nghiêng","","",1],["弓","CUNG","cái cung","tưởng tượng ra hình cái cung","KYUU","yumi",1],["彐","KỆ","đầu con nhím","đầu Em ( chữ E viết ngược) như đầu con NHÍM, có 3 cái lông lởm chởm一","","",1],["彡","SAM","lông, tóc dài","giống như mái tóc cô gái bay bay trong gió","","",1],["彳","XÍCH","bước chân trái","trên con dốc đi xuống 二, bước1 chân trái 〡 ra ngoài con đường","","",1],["戈","QUA","cây qua (một thứ binh khí dài)","QUA戈 DẶC弋 NÔ丿 dùng cây bắn","","",1],["心","TÂM( TÂM ĐỨNG)","tâm lí, nội tâm","Nửa vầng trăng khuyết(し) 3 sao丶 giữa trời","SHIN","kokoro",1],["戶","HỘ","cửa một cánh","có XÁC CHẾT尸 dựng sau 1 一cánh cửa","","",1],["手","THỦ (TÀI GẢY)","tay, thủ đoạn","T 2 đường thẳng là tay 手 Tê て 二 đường thẳng cũng tay 手 còn gì","SHU","te, ta",1],["攴","PHỘC","(攵) đánh khẽ","LẠI又 卜 bị ĐÁNH KHẼ cảnh cáo vì cái tội suốt ngày xem BÓI","","",1],["支","CHI","chi nhánh, chi trì (ủng hộ)","LẠI又 mở thêm 1十 cái chi nhánh","SHI","sasa(eru)",1],["斗","ĐẨU","một đấu","MƯỜI十 HẠT丶 ĐẤU斗 loại trong CÁI","TO","",1],["文","VĂN","văn chương, văn học","亠 乂 文 Người có ĐẦU óc thường có tài NGHỆ để viết VĂN","BUN, MON","fumi",1],["斤","CÂN","cân, ký (đo lường)","CÁI RÌU hình chữ T cân bằng cả SƯỜN NÚI厂","KIN","",1],["方","PHƯƠNG","phương hướng, phương pháp","Vạn(万) đầu(亠) phương(方) cô tiên bay về tây PHƯƠNG. cái đều hướng về một","","",1],["日","NHẬT","mặt trời, ngày, nhật thực, nhật báo","Mặt trời giống Hình Chữ Nhật ロ, bị chia làm đôi 一 : nửa trên là Ngày 日, nửa dưới là đêm.","NICHI, JITSU","hi, ka",1],["无","VÔ","không","TO大 thánh一 khổ无 Người đã gãy 1 chân còn đội vòng trên đầu là VÔ cùng","","",1],["月","NGUYỆT","mặt trăng, tháng, nguyệt san, nguyệt thực","MẶT TRĂNG đứng dậy( lên) bằng hai chân .","GETSU, GATSU","tsuki",1],["曰","VIẾT","nói rằng","VIẾT, NÓI RẰNG người yêu em giống như MẶT TRỜI 日","","",1],["木","MỘC","cây, gỗ","Chữ BẤT 不 giống hình cây 木 mọc ngược, sẽ không sống được, đại diện cho sự phủ định (chẳng, không).","BOKU, MOKU","ki, ko",1],["欠","KHIẾM","khiếm khuyết","NGƯỜI 人 bị KHIẾM KHUYẾT NÃO nên đội ĐAO⺈ lên trên đầu xong đi lại mà k sợ chết","KETSU","ka(keru), ka (ku)",1],["歹","NGẠT, ĐÃI","xấu xa, tệ hại","1一 Chiều夕 歹 Tối ngột NGẠT","","",1],["止","CHỈ","đình chỉ","Hình ảnh người đứng trên mặt đất _ , dựa lưng vào bức tường I, chỉ tay卜 về phía xa","SHI","to(maru), to (meru)",1],["毋","VÔ","chớ, đừng","RUỘNG田 毋 毋có dêレ có rồi thì ĐỪNG cố chiếm thêm đất xung quanh nữa. ĐỪNG mà xồm con gái người ta nữa, không thì có mười十 mẹ cũng không bảo bọc 勹 cho con được đâu","","",1],["殳","THÙ","binh khí dài, cái gậy","lúc THÙ殳 nhau thì LẠI 又 lấy GHẾ几 làm binh khí","","",1],["比","TỶ","so sánh, tỉ lệ, tỉ dụ","CỨ RA BẺ LUôn(くらべる) 2 cái THÌA(匕) mà SO SÁNH(比).","HI","kura(beru)",1],["毛","MAO","lông","đầu có nhiều LÔNG TÓC thì mới cài được nhiều trâm. XÌ し ,tay đàn ông gì mà có mỗi 3三 cái LÔNG","","",1],["氏","THỊ","họ, họ tên, họ gia đình","(氏) Em (E) là (L) người có họ tên","SHI","uji",1],["气","KHÍ","hơi nước","NGƯỜI NẰM NGANG ー, xuôi xuống 乁, feel không KHÍ气","","",1],["水","THUỶ","thủy điện","Dòng chảy qua 2 khe núi là Nước 水","SUI","mizu",1],["火","HỎA","lửa","Người đang bốc khói , như có lửa (hoả) trong người","KA","hi, ho",1],["父","PHỤ","phụ tử, phụ thân, phụ huynh","cha tôi có râu","FU","chichi",1],["爪","TRẢO","móng vuốt cầm thú","MÓNG tay cào lên TRẢO để lại 3 vết xước dài","","",1],["爻","HÀO","hào âm, hào dương (Kinh Dịch)","2 八 tay cầm KIẾM 乂 bảo vệ con","","",1],["爿","TƯỜNG","mảnh gỗ, cái giường (丬)","giống hình bức tường với cái bàn trang điểm kê sát vào tường","","",1],["片","PHIẾN","tấm","PHIẾN片 Dọn dẹp xong loạn thì đi cầu hôn công chúa ( nhìn như một người quỳ xuống mở hộp nhẫn )","HEN","kata",1],["牙","NHA","răng","số 9 có LƯỠI 丿 NHA 牙^^","","",1],["犬","KHUYỂN","con chó","Con người là ông Chủ丶 vĩ Đại 大 nhất của loài Chó 犬.","KEN","inu",1],["牛","NGƯU","con trâu","nét丿 hình con trâu với thân hình là nét |, tứ chi là =, và cái sừng là","GYUU","ushi",1],["玉","NGỌC","ngọc, đá quý, viên tròn","玉 王 丶 Bảo Ngọc trong thiên hạ đều do Vua làm Chủ nhân.","GYOKU","tama",1],["玄","HUYỀN","màu đen","CÁI ĐẦU亠 của YÊU幺 Tinh thì rất là HUYỀN Bí","GEN","",1],["瓦","NGÕA","ngói","lật ngược chữ lại.. 21 Công trường đều lợp ngói","","",1],["瓜","QUA","quả dưa","lấy MÓNG TAY爪 chọc vào QUẢ DƯA瓜","","",1],["生","SINH","sinh sống, sinh sản","mẹ già khóc bên mộ ĐẤT của con, nhớ về hồi mới SINH con ra. con người(イ) chọn nơi đất (土) màu mỡ để sinh(生) sống","","",1],["甘","CAM","ngọt, cam chịu","NGÀY 日nào cũng THẢO艹 mai =}ngọt ngào","KAN","ama(i), ama (eru), ama (yakasu)",1],["用","DỤNG","sử dụng, dụng cụ, công dụng","Để sử Dụng,các Quynh冂 đệ k nên Ki(キ) bo","YOO","mochi(iru)",1],["田","ĐIỀN","điền viên, tá điền","Mặt vuông chữ điền","DEN","ta",1],["疋","THẤT","Đủ, chân","đi xem BÓI卜, thầy phán : con làm NGƯỜI人 chỉ cần 1 CHÂN疋 là đủ","","",1],["疒","NẠCH","bệnh tật","ra khỏi bên ngoài MÁI NHÀ广 có BĂNG冫 nên dễ bệnh疒","","",1],["白","BẠCH","thanh bạch, bạch sắc","da trắng 白 cả ng chỉ thấy 1 cọng lông","KAKU, BYAKU","shiro, shira, shiro(i)",1],["癶","BÁT","gạt ngược lại, trở lại","Tượng hình: Mưa rơi trên mái nhà nên vừa bước chân ra đã phải quay trở lại","","",1],["皮","BÌ","da","đã bị đánh đi đánh LẠI 又 đến rách DA皮 rách thịt dưới MÁI NHÀ 广 đó","HI","kawa",1],["皿","MÃNH","đĩa","nhìn giống như cái Bánh xếp trên ĐĨA _","","sara",1],["目","MỤC","mắt, hạng mục, mục lục","chớp mắt目 hết một一 ngày日","MOKU, BOKU","me, ma",1],["矢","THỈ","mũi tên","mũi TÊN丿 bắn lên TRỜI 天","SHI","ya",1],["矛","MÂU","mâu thuẫn","Quỷ xà MÂU là một con MA (マ) cầm Ô (オ)","MU","hoko",1],["石","THẠCH","đá, thạch anh, bảo thạch","Dưới sườn núi 厂 có nhiều viên đá nhỏ như miệng 口","SEKI, SHAKU, KOKU","ishi",1],["示 (礻)","THỊ (KỲ)","chỉ thị; thần đất(礻)","二 chú tiểu 小 bày tỏ quan điểm về kỳ THỊ","","",1],["禸","NHỰU","vết chân, lốt chân","BIÊN GIỚI冂 của TÔI厶 được xác định bằng 1 dấu chân","","",1],["穴","HUYỆT","sào huyệt","Dưới MÁI NHÀ宀 có 8八 cái HUYỆT","KETSU","ana",1],["禾","HÒA","lúa","CÂY木 hạt丿 trên đầu ngọn có một giống là lúa","","",1],["竹","TRÚC","trúc","tiếng kêu kekeケケ phát ra từ bụi trúc","CHIKU","take",1],["立","LẬP","thiết lập, tự lập","giống hình ông quan ngày xưa đang đứng","RITSU, RYUU","ta(tsu), ta(teru)",1],["米","MỄ","gạo","CÂY木 có hai HẠT丶 phía trên là lúa gạo.","BEI, MAI","kome",1],["糸","MỊCH","sợ chỉ","SỢI TƠ thì rất NHỎ小 YẾU 幺","SHI","ito",1],["缶","PHẪU","đồ hộp","NGỌ午 山nhặt PHẪU缶 Giờ lên NÚI cái sành về dùng","KAN","",1],["羊","DƯƠNG","con cừu","Con Dê là BA dượng(三 DƯƠNG) bị cắm(l) sừng(丶ノ)","YOO","hitsuji",1],["网","VÕNG","cái lưới (罒– 罓)","vẽ hình mảnh lưới vuông 冂với các mắt lưới乂乂","","",1],["老","LÃO","già, lão luyện","Người già thì chống GẬYノ xuống ĐẤT土 và ăn bằng THÌA匕","ROO","o(iru), fu(keru)",1],["羽","VŨ","lông vũ","nhìn giống Hai cái cánh chim","U","ha, hane",1],["耒","LỖI","cái cày","Hai= cái cây木 ghép Lỗi thành cái Cày","","",1],["而","NHI","mà, và","nhìn như 1 一 cái bồ cào 4 răng của chư bát giới","","",1],["耳","NHĨ","tai","MẮT目 ở giữa, còn mấy cái nhánh thò ra là tai","JI","mimi",1],["聿","DUẬT","cây bút","Câu bút Yoヨ kỷ キ Duật (zô kỷ luật","","",1],["肉","NHỤC","thịt","2 người 人 bị mắc kẹt trong lao tù, cảm thấy NHỤC và thèm thịt mà không có để ăn","NIKU","",1],["臣","THẦN","trung thần","xoay chữ sang 9 độ , ta thấy như cái bục xếp hạng , ở giữa là vua , 2 bên là hạ THẦN","SHIN, JIN","",1],["自","TỰ","tự do, tự kỉ, tự thân","TỰ nhiên đứng lên cái tủ 3 tầng","JI, SHI","mizuka(ra)",1],["至","CHÍ","đến","cần 14 一 厶 tiếng là đến được vùng đất土 này","SHI","ita(ru)",1],["臼","CỮU","cái cối giã gạo","giã vào Cái Cối 臼 làm Mặt Trời 日 nứt đôi vĩnh Cữu","","",1],["舛","SUYỄN","sai suyễn, sai lầm","Con BÒ牛 mak lộn ngược vào CHIỀU TỐI 夕 là một sai lầm","","",1],["舌","THIỆT","cái lưỡi","千 MỒM口 hàng NGHÌN cái đều nói ra bằng lưỡi","ZETSU","shita",1],["舟","CHU","thuyền","Nhìn từ trên xuống giống cái thuyền, người ngồi sau chèo cho người đằng trc Chu du","SHUU","fune, funa",1],["艮","CẤN","quẻ Cấn (Kinh Dịch); dừng, bền cứng","艮 – cấn – bền bỉ: vì có sức bền nên dưới ánh nắng mặt trời 日 gay gắt, anh rể レ (re trong katakana) tôi đầu 亠 đội mũ ra đồng cấy lúa","","",1],["色","SẮC","màu sắc, sắc dục","Hình vẽ con Kỳ nhông, vì nó là loài thay đổi màu sắc rất nhanh nên cổ nhân dùng nó để chỉ chữ Sắc: màu sắc.","SHOKU, SHIKI","iro",1],["虍","HÔ","vằn vện của con hổ","ー 广 七 1 người trên mái nhà 7 người trong nhà vây bắt vằn hổ","","",1],["艸","THẢO","cỏ (艹)","2 lần bộ 屮 TRIỆT(mầm non) \" cỏ mọc lên\" thì sẽ thành bộ 艸 THẢO","","",1],["血","HUYẾT","tâm huyết","Con dao dính máu cắm vào ĐĨA 皿","KETSU","chi",1],["虫","TRÙNG","côn trùng","Trung中 huyềnー Trùng ^^","CHUU","mushi",1],["行","HÀNH","thực hành, lữ hành; ngân hàng","CHÂN TRÁI 彳vừa bước đi đã dẵm phải 1ー cái ĐINH丁","KOO, GYOO, AN","i(ku), yu(ku), okona(u)",1],["衣","Y","y phục","I ngắn イ và Y dài thêm ĐẦU 亠 thành Y phục","I","koromo",1],["見","KIẾN","ý kiến","Mắt 目 Nhìn 見 mấy em Chân 儿 dài, thèm chảy nước dãi.","KEN","mi(ru), mi(eru), mi(seru)",1],["襾","Á","che đậy, úp lên","vẽ hình cái bình ngâm rượu có cái nắm - đậy trên miệng bình","","",1],["言","NGÔN","ngôn ngữ, ngôn luận, phát ngôn","cái MIỆNG口 nói ra 3 lời ngắn, 1 lời dài","GEN, GON","i(u), koto",1],["角","GIÁC","tam giác, tứ giác","RUỘNG田 SỪNGク Ở góc có tê GIÁC","KAKU","kado, tsuno",1],["谷","CỐC","thung lũng, khê cốc","hình vẽ Giữa thung lũng có một ngôi nhà.","KOKU","tani",1],["豆","ĐẬU","hạt đậu","MỒM 口 ngậm 1一 đống cỏ䒑 đúng là óc bã ĐẬU","TOO, ZU","mame",1],["豕","THỈ","con heo, con lợn","1 ーtay 手có 6 ngón mới bắt được con lợn","","",1],["豸","TRÃI","loài sâu không chân","1一 con sâu có chân丶丶 đậu ở trên đầu cái ĐINH丁, 2 con sâuノノ còn lại bám vào thân cái đinh","","",1],["赤","XÍCH","đỏ, xích kì, xích đạo, xích thập tự","Đất nung trên lửa sẽ thành gạch ĐỎ","SEKI, SHAKU","aka, aka(i), aka (ramu), aka (rameru)",1],["貝","BỐI","vỏ sò","Đi hai hàng chữ bát八, đảo mắt 目tìm vỏ sò đẹp.","","kai",1],["走","TẨU","chạy","走thoát, CHÂN疋 ĐẤT土 1 người đang CHẠY TẨU để lại dấu trên mặt","SOO","hashi(ru)",1],["足","TÚC","chân, bổ túc, sung túc","人nọ 口 足lên Người há miệng thở hồng hộc, vắt chân cổ mà chạy.","SOKU","ashi, ta(riru), ta (ru), ta(su)",1],["車","XA","xe cộ, xa lộ","MƯỜI十 MẶT TRỜI 日không bằng MỘT一 đoạn đường XA","SHA","kuruma",1],["身","THÂN","thân thể, thân phận","Tự自 THÂN身 Gậyノ Về già mình phải chống đi chơi","SHIN","mi",1],["辰","THẦN","nhật, nguyệt, tinh; thìn (1","(レＹ）của 二 辰 厂. Cuộc chia ly 2 vị thần dưới sườn núi","","",1],["辛","TÂN","cay","Người ĐỨNG立 trên cây THẬP十 tự giá chịu nhiều cay đắng","SHIN","kara(i)",1],["辵辶","QUAI XƯỚC","chợt bước đi chợt dừng lại (辶 )","3 đi công tác xa trong 2ミ ngày.","","",1],["邑阝","ẤP","vùng đất, đất phong cho (阝) quan","làm Bộ (B) trưởng nên giàu có mua được nhiều ĐẤT","","",1],["釆","BIỆN","phân biệt","Cắt ngọn丿 thóc米 để BIỆN luận là ko ăn chộm thóc","","",1],["酉","DẬU","Chi Dậu, chi thứ mười trong mười hai chi","(一) TÂY(西). Vẫn thích NHẤT là gà(DẬU) KFC có biểu tượng ông già phương","","",1],["里","LÝ","làng","Nhiều RUỘNG 田 ĐẤT 土thì là làng","RI","sato",1],["金","KIM","hoàng kim, kim ngân","(王) ông VUA chôn 2 thỏi VÀNG dưới ngọn núi","KIN, KON","kane, kana",1],["長","TRƯỜNG","trường giang, sở trường; hiệu trưởng","E LY (レY ) có mái tóc dài 長 bay bay trong gió","CHOO","naga(i)",1],["門","MÔN","cửa, nhập môn, môn đồ, bộ môn","Tượng Hình: cánh cổng, cửa 2 cánh trong quán bar ở phim cao bồi.","MON","kado",1],["阜 阝","PHỤ","đống đất, gò đất (阝)","1十 ông quan phụ mẫu đứng trên gò đất","","",1],["隶","ĐÃI","kịp, kịp đến","Lấy 3 thùng NƯỚC氺 ngọt đãi bạn bè","","",1],["隹","TRUY, CHUY","chim đuôi ngắn","một NGƯỜI亻 thì chỉ làm CHỦ主 nhân MỘT con CHIM ở phía dưới của mình","","",1],["雨","VŨ","mưa","Nhìn hình chú ý một chút sẽ thấy chữ T nằm chồng lên chữ M, cách nhớ sẽ là:[T]rời [M]ƯA [4] hạt.","U","ame, ama",1],["非","PHI","phi nhân đạo, phi nghĩa","Người PHI thường có thể leo trên cái thang ngược","HI","",1],["青","THANH","xanh, thanh thiên, thanh niên","THANh minh trong tiết tháng 3","SEI, SHOO","ao, ao(i)",1],["革","CÁCH","da thuộc, cách mạng","1十 thằng TQ中 dùng Cỏ艹 là CÁCH bẫy thú lấy Da","KAKU","kawa",1],["面","DIỆN","phản diện, chính diện","MẶT thì ở dưới đầu và bao gồm MIỆNG囗 và MẮT目","MEN","omo, omote, tsura",1],["韋","VI","da đã thuộc rồi (韦)","5 五lần khẩu口 nghiệp bằng 1 năm ヰvi hành","","",1],["韭","PHỈ, CỬU","rau phỉ (hẹ)","rau PHỈ một - khi phi hành mỡ thì thơm PHI 非 thường","","",1],["頁","HIỆT","đầu; trang giấy (页)","CON SÒ (貝 - BỐI) bò trên ĐẦU(亠 - ĐẦU) TỜ GIẤY (頁 - HIỆT)","","",1],["音","ÂM","âm thanh, phát âm","立 日để Đứng lên ghế cả ngày luyện âm. Mệt.","ON, IN","oto, ne",1],["飛","PHI","bay, phi công, phi hành","Hai cánh chim 飞 phi 飛 thăng 升 lên trời.","HI","to(bu), to (basu)",1],["風","PHONG","phong ba, phong cách, phong tục","Phải chi cơn gió 風 có thể thôi hết bọn côn trùng 虫 trong cái trường kỷ 几 này đi.","FUU, FU","kaze, kaza",1],["食","THỰC","ẩm thực, thực đường","Người (人) mới nhận lương (良) thì phải nghĩ đến ĂN trước (THỰC 食","SHOKU, JIKI","ku(u), ku(rau), ta(beru)",1],["首","THỦ","đầu, cổ, thủ tướng","首 䒑 自 Thủ đoạn trồng cỏ của tôi không có gì đặc biệt, thì tự mình trồng thôi.","SHU","kubi",1],["馬","MÃ","ngựa","chân灬 dài勹 hình con ngựa 4 với cái đuôi và cái bờm ngựa phía trên bay trong gió","BA","uma, ma",1],["香","HƯƠNG","mùi hương, hương thơm","NGÀY日 LÚA禾 mùa chín THƠM.","KOO, KYOO","ka, kao(ri), kao (ru)",1],["骨","CỐT","xương, cốt nhục","chị nguyệt月 cho xương CỐT vào quan tài","KOTSU","hone",1],["高","CAO","cao đẳng, cao thượng","亠 口 何 高い đội nắp ấm lên mồm để làm gì ? Để cho nó cao","KOO","taka(i), taka, taka(maru), taka(meru)",1],["鬥","ĐẤU","chống nhau, chiến đấu","門 2 ông VUA đứng ĐẤU nhau trong CỔNG","","",1],["髟","BƯU, TIÊU","tóc dài; sam (shān)=cỏ phủ mái nhà","髟 Bà E đang quỳ với mái tóc hoa tiêu dài bay trong gió.","","",1],["鬲","CÁCH","tên một con sông xưa","chỉ có 104 CÁCH Thôi","","",1],["鬯","SƯỞNG","rượu nếp; bao đựng cây cung","SƯỞNG Rượu Nếp = nồi rượu nếp 凶 được nấu trên lửa (匕 ~ Hi ~ 火)","","",1],["魚","NGƯ","cá","Đốt lửa (灬) dưới ruộng (田), cá (魚) chết nổi lềnh bềnh","GYO","uo, sakana",1],["鬼","QUỶ","ma quỷ","Thấy con mụ ( chữ ム) ma đang bước đi儿 trên đồng ruộng田","KI","oni",1],["鳥","ĐIỂU","chim chóc","白 hình con chim màu trắng với cái đuôi dài phía dưới","CHOO","tori",1],["鹵","LỖ","đất mặn","区 xem BÓI thấy ở vùng đất này có 4 xác chết(4 dấu phẩy) mãi không phân hủy nên đoán đó là ĐẤT MẶN có nhiều muối","","",1],["麥","MẠCH","lúa mạch (麦)","có 2 Người nhỏ theo Sau Cây Lúa Mạch lớn.","","",1],["鹿","LỘC","con hươu","Con hươu ở trong nhà广 mắt 目trông ra miệng cười hi hiヒヒ","","",1],["麻","MA","cây tầm ma","cây林 nhà广 Lấy trong rừng về làm ma tuý","MA","asa",1],["黃","HOÀNG","màu vàng","tưởng tượng giống hình ông Hoàng thượng đội mũ, vai rộng, thân là hình vuông, dang 2 chân","","",1],["黍","THỬ","lúa nếp","cây LÚA 禾mùa được mưa nhiều NƯỚC水 nên NGƯỜI 人ăn sẽ thấy rất thơm ngon","","",1],["黑","HẮC","màu đen","châm lửa灬 đốt rơm ở ruộng田, còn lại đống đất 土đen thui","","",1],["黹","CHỈ","may áo, khâu vá","khi may 1 tấm vải 一 vào một cái khăn 巾 thì cần 4 đường chỉ trên, 4 đường chỉ dưới. Trong 4 đường chỉ dưới thì 2 cái trong 2 cái ngoài","","",1],["黽","MÃNH","con ếch; cố gắng (mãnh miễn)","như hình con ếch, 2 cục to ở trên là cái đầu với 2 má phình ra, 4 cục vuông ở dưới là tứ chi, dưới cùng là cái đuôi","","",1],["鼓","CỔ","cái trống","CHI 支 10 十 HẠT ĐẬU 豆 để mua cái TRỐNG 鼓 CỔ","KO","tsuzumi",1],["鼎","ĐỈNH","cái đỉnh","Đỉnh đúc bằng kim loại có 3 chân và 2 tai","","",1],["鼠","THỬ","con chuột","Phía trên 臼 CỮU cái cối ngày xưa để giã gạo. Dưới: 4 hại gạo rơi xuống và 3 cái đuôi chuột.","","",1],["齊","TỀ","ngang bằng, cùng nhau (斉 –齐)","Y ngồi giữa 2 anh Lực quần áo Nón chỉnh Tề. phía dưới là cái Thang","","",1],["龍","LONG","con rồng (龙)","Đứng trên Trăng dùng 5 cái lược chải Long thấy con Rồng","","",1],["齒","XỈ","(歯 –齿) răng","xỉ: 4 người bị nhốt thành 2 tầng trong hố , nắp hố cũng đóng lại nên cả đoàn phải dừng không đi đâu dc nên đói nhăn răng","","",1],["龠","DƯỢC","sáo","Dưới MÁI NHÀ có MỘT cây sáo BA LỖ đang được sử DỤNG","","",1],["龜","QUY","(亀–龟) con rùa","Đầu móc,mai nhân,chân dĩa,đuôi dài","","",1],["乂","NGHỆ","tài nghệ","dấu X viết theo lối NGHỆ thuật","","",1],["万","VẠN","vạn, nhiều, vạn vật","1一 勹 mẹ như có VẠN cánh tay luôn luôn BAO BỌC cho con","MAN, BAN","",0],["川","XUYÊN","sông","ノ｜, ｜ 川 2 dòng nước lớn 1 dòng nước nhỏ tạo thành dòng Sông","SEN","kawa",0],["月","NGUYỆT","mặt trăng, tháng, nguyệt san, nguyệt thực","Khi mặt trợi lặn cũng là lúc mặt trăng đứng dậy( lên) bằng hai chân .","GETSU, GATSU","tsuki",0],["三","TAM","ba, số ba","gạch ngang 3 nét","SAN","mi, mi(tsu), mit (tsu)",0],["四","TỨ","bốn, số bốn","rèm cửa có 4 góc. Trẻ em nên sống trong phạm vi 囗 4 lời dạy của Bác Hồ ( cần, kiệm, liêm , chính)","","",0],["五","NGŨ","năm, số năm","3 NGANG + 2 DỌC = 5","GO","itsu, itsu(tsu)",0],["六","LỤC","sáu, số 6","亠 八 六 Đầu năm phát (Bát gần giống Phát) Lộc (Lục gần giống lộc)","ROKU","mu, mu(tsu), mut(tsu), mui",0],["七","THẤT","bảy, số 7","Số 7 viết ngược.","SHICHI","nana, nana (tsu), nano",0],["百","BÁCH","trăm, bách niên","ai TRẮNG白 NHẤT一 được 1 điểm","HYAKU","",0],["九","CỬU","chín, số chín","chín cầu trượt","KYUU, KU","kokono, kokono(tsu)",0],["万","VẠN","vạn, nhiều, vạn vật","1 vạn(10000) là số có 5 chữ số. Không có chỉ điểm của Ngài 方 thì không thấy Phương 方 hướng trong Vạn 万 nẻo đường.","","",0],["千","THIÊN","nghìn, nhiều, thiên lí","phẩy sang trái (丿) 1 nét trên đầu số 1 (十) mà nó đã thành 1 (千)","SEN","chi",0],["円","VIÊN","viên mãn, tiền Yên","ngực người phụ nữa VIÊN MÃN sẽ có hình TRÒN đày đặn","EN","maru(i)",0],["学","HỌC","học sinh, học thuyết","Đứa Con 子 (TỬ) đang ngồi dưới bóng đèn Sáng ((cid:0).つかんむり)==> là đang Học (学) bài.","GAKU","mana(bu)",0],["会","HỘI","hội họp, đại hội","Hai (二) Người (人) muốn làm chuyện Riêng Tư (厶 KHƯ).==> hẹn GẶP (会 HỘI)nhau ở hotel.","KAI, E","a(u)",0],["先","TIÊN","tiên sinh, tiên tiến","Người cầm khiên Tiên phong đi trước","SEN","saki",0],["社","XÃ","xã hội, công xã, hợp tác xã","có Thổ xây nhà-->thành Thị--> Xã hội","SHA","yashiro",0],["員","VIÊN","thành viên, nhân viên","(貝) (口) nhân viên đi làm kiếm tiền để có cái ăn bỏ vào miệng","IN","",0],["者","GIẢ","học giả, tác giả","ĐẤT mà nằm trên mặt trời (NHẬT) là chuyện GIẢ tưởng","SHA","mono",0],["医","Y","y học, y viện","医 - Thần Y, mở hộp thuốc (匚) ra, thì mủi tiêm (/) bắn lên trời (天)","I","",0],["本","BẢN","sách, cơ bản, nguyên bản, bản chất","Cây 木 bị chặt (thêm 1 gạch ngang ở dưới) để làm ra sách 本","HON","moto",0],["中","TRUNG","trung tâm, trung gian, trung ương","口 丨 中 Giữa chữ Khẩu có chữ Cổn gọi là chữ Trung","CHUU","naka",0],["今","KIM","đương kim, kim nhật","人 今 Người nhìn đồng hồ chỉ ra(kata) bây giờ là mấy giờ","KON, KIN","ima",0],["国","QUỐC","nước, quốc gia, quốc ca","VÂY quanh 1 viên NGỌC là 1 QUỐC gia","KOKU","kuni",0],["朝","TRIỀU","buổi sáng, triều đình","buổi sáng mặt trời nhìu hơn mặt trăng","CHOO","asa",0],["昼","TRÚ","buổi trưa","buổi TRƯA mặt trời xuất hiện giữa cửa sổ có 2 tấm rèm (tượng hình","CHUU","hiru",0],["晩","VÃN","buổi tối","Ngày 日 nào cũng than VÃN khi nào mới được miễn 免 tội","BAN","",0],["晩","VÃN","buổi tối","VÃN : Miễn là không phải ngày “ thì là đêm rồi","BAN","",0],["分","PHÂN","phân số, phân chia","Dùng dao chặt cây để phân tích","BUN, FUN, BU","wa(keru), wa (kareru), wa (karu), wa (katsu)",0],["時","THỜI","thời gian","Người X đứng dưới đất ( Thổ) cầm cục đất trọi mặt trời (Nhật) thì mất Thời gian","JI","toki",0],["半","BÁN","bán cầu, bán nguyệt","chặt 3 cái que ra làm đôi, nhưng chỉ có 1 đoạn bị đứt!","HAN","naka(ba)",0],["午","NGỌ","chính ngọ","十 午. Nằm đến 1h Trưa","GO","",0],["前","TIỀN","trước, tiền sử, tiền chiến, mặt tiền","chi Hằng (月) cầm con Dao (刂) chui xuống gầm Giường (丬) Trước khi (前 TIỀN) bọn cướp xông vào","ZEN","mae",0],["後","HẬU","sau, hậu quả, hậu sự","sau: Yêu 幺 thầm thường lặng lẽ Bước 彳theo Sau 後. \"Phía sau một cô gái\"-Soobin Hoàng Sơn.","GO, KOO","nochi, ushi(ro), ato, oku(reru)",0],["休","HƯU","hưu trí, hưu nhàn","(亻)ngồi (木) (休). Người bên gốc Cây để Nghỉ Ngơi","KYUU","yasu(mu), yasu (maru), yasu (meru)",0],["毎","MỖI","mỗi","người NẰM NGANG trên mảnh RUỘNG MỖI NGÀY để trông nom ruộn","MAI","",0],["行","HÀNH, HÀNG","thực hành, lữ hành; ngân hàng","Bước trái (Sách), bước phải (Xúc) hợp lại thành chữ Hành","KOO, GYOO, AN","i(ku), yu(ku), okona(u)",0],["何","HÀ","cái gì, hà cớ","NGƯỜI đang khiêng CÁI GÌ đó. Người (亻nhân đứng) có Khả năng (可).==> thì làm Cái Gì (何 HÀ) cũng được.","","",0],["校","HIỆU","trường học","Ở trường 校 các học sinh giao lưu 交 dưới gốc cây 木","KOO","",0],["来","LAI","đến, tương lai, vị lai","米 十 Thu hoặc lúa gạo vào tháng 1","RAI","ku(ru), kita(ru), kita(su)",0],["去","KHỨ","quá khứ, trừ khử","土_ 厶_ ∷ chôn xuống ĐẤT chuyện RIÊNG TƯ sẽ thành QUÁ KHỨ","KYO, KO","sa(ru)",0],["週","CHU","tuần","Đi 辶 vòng quanh 周","SHUU","",0],["年","NIÊN","năm, niên đại","nhìn vào thấy (十)và (二). là 12 tháng trong 1 năm","NEN","toshi",0],["駅","DỊCH","ga","Con ngựa(馬)bị Xích (尺)trước cửa GA","EKI","",0],["電","ĐIỆN","phát điện, điện lực","Trời mưa (雨) và có sấm sét trên cánh đồng (雷).","DEN","",0],["動","ĐỘNG","hoạt động, chuyển động","Muốn DI CHUYỂN (動く) phải có TRỌNG (重) LỰC (力)","DOO","ugo(ku), ugo (kasu)",0],["転","CHUYỂN","chuyển động","(車) (転) (二) (ム) Xe trung chuyển hai tư chỗ !","TEN","koro(garu), koro(geru), koro(gasu), koro(bu)",0],["安","AN","an bình, an ổn","Người phụ (NỮ 女) dưới mái nhà(MIÊN 宀) sẽ được AN toàn","AN","yasu(i)",0],["大","ĐẠI","to lớn, đại dương, đại lục","Nhất (1)+ Nhân (人)","DAI, TAI","oo, oo(kii), oo (ini)",0],["新","TÂN","mới, cách tân, tân thời","Dùng RÌU(斤) ĐỨNG(立) chặt CÂY(木) để xây nhà MỚI(新)","SHIN","atara(shii), ara (ta), nii",0],["古","CỔ","cũ, cổ điển, đồ cổ","Miệng(口) nói 10 lần(十) thì thành cũ(古)","KO","furu(i), furu(su)",0],["黒","HẮC","đen, hắc ám","ruộng đất bị đốt cháy đen","KOKU","kuro, kuro(i)",0],["上","THƯỢNG","t h ư ợ ng tầng, thượng đ ẳ n g","sao lắm âm kun thế không biết nũa","JOO, SHOO","ue, uwa, kami, a (g e ru ), a (g a ru ), n obo (ru), nobo (seru), nobo",0],["母","MẪU","mẹ, phụ mẫu, mẫu thân","MẸ là người bẻ gãy mấu chốt những điều KHÔNG THỂ毋 (vô)","BO","(su) haha",0],["下","HẠ","dưới, hạ đẳng","(一) (卜) Một lần coi Bói là HẠ mình","KA, GE","shita, shimo, moto, sa(geru), sa(garu), kuda (ru), kuda(su), kuda(saru), o",0],["好","HẢO, HIẾU","hữu hảo; hiếu sắc","Đứa con (子 thì hay yêu mẹ (女)","KOO","(rosu), o(riru) kono(mu), su (ku)",0],["飲","ẨM","ẩm thực","cõng người KHUYẾT欠 tật thì không chỉ ĂN食 nhiều mà UỐNG飲 cũng nhiều","IN","no(mu)",0],["主","CHỦ","chủ yếu, chủ nhân","vua王 chỉ vào đầu nói tao là CHỦ","SHU, SU","nushi, omo",0],["物","VẬT","động vật","bò và heo là những động Vật","BUTSU, MOTSU","mono",0],["近","CẬN","thân cận, cận thị, cận cảnh","có thằng cầm RÌU tiến TỚI gần cảm thấy CẬN kề cái chết","KIN","chika(i)",0],["右","HỮU","bên phải, hữu ngạn, cánh hữu","Bạn Na (ナ) Mồm (口) nói điều PHẢI (右)","U, YUU","migi",0],["間","GIAN","trung gian, không gian","(日) (門) có thể nhìn thấy MẶT TRỜI mọc lên GIỮA CỔNG. Ở Nhật có cánh cổng thời gian (間) (Doreamon)","","",0],["外","NGOẠI","ngoài, ngoại thành, ngoại đạo","(夕)đi (卜)hàng (外) chủ TỊCH BỐC đi xuất NGOẠI","GAI, GE","soto, hoka, ha (zusu), hazu (reru)",0],["左","TẢ","bên trái, tả hữu, cánh tả","tay TRÁI cầm thước, tay phải cầm bút. vận CÔNG bằng tay trái","","",0],["書","THƯ","thư đạo, thư tịch, thư kí","trời日 Dùng bút vẽ ông mặt","SHO","ka(ku)",0],["男","NAM","đàn ông, nam giới","Đủ sức LỰC (力) để vác cả thửa RUỘNG (田) lên vai chỉ có thể là NAM (男) giới.","DAN, NAN","otoko",0],["聞","VĂN","nghe, tân văn (báo)","(門) (耳) Bị Phạt : Đứng cửa lớp nghe thầy giảng Văn _ Hẳn Là Tuấn_","BUN, MON","ki(ku), ki (koeru)",0],["話","THOẠI","nói chuyện, đối thoại, giai thoại","Trước khi NÓI (言), thì uốn lưỡi (舌","WA","hana(su), hanashi",0],["買","MÃI","mua, khuyến mãi","Mắt 罒 nhìn thấy bảo Bối 貝 thì mua 買 ngay","BAI","ka(u)",0],["起","KHỞI","khởi động, khởi sự, khởi nghĩa","TỰ mình CHẠY trên đôi chân của chính mình để KHỞI nghiệp","KI","o(kiru), o (koru), o(kosu)",0],["友","HỮU","bạn hữu, hữu hảo","BẠN BÈ là : dù chỉ là quả na ナ cũng phải có qua có LẠI (hựu)","YUU","tomo",0],["帰","QUY","hồi quy","Từ bỏ ĐAO kiếm ta trở về(QUY) quê hương làm lao công quét nhà cho vk bằng chổi( TRỬU)","KI","kae(ru), kae (su)",0],["達","ĐẠT","đạt tới, điều đạt, thành đạt","Con Dê ĐẠT được giải đội Đất chạy trên Đường","TATSU","",0],["茶","TRÀ","trà","THẢO uống trà dưới mái nhà cười hô hôホ","CHA, SA","",0],["酒","TỬU","rượu","(酉) (酒) (氵). Có mồi ngon như thịt Gà ta uống Rượu nhiều như Nước lã","SHU","sake, saka",0],["写","TẢ","miêu tả","tả lại hình ảnh 5 ng đội 1 cái khăn","SHA","utsu(su), utsu (ru)",0],["真","CHÂN","chân lí, chân thực","1 con MẮT kê cao lên bàn để thấy mọi thứ một cách chân thật nhất","SHIN","ma",0],["紙","CHỈ","giấy","Viết họ氏 tên lên tờ giấy mỏng như sợi chỉ糸","SHI","kami",0],["映","ÁNH","phản ánh","ÁNH Sáng ban Ngày chiếu vào Trung Ương","EI","utsu(ru), utsu (su), ha(eru)",0],["画","HỌA, HOẠCH","họa sĩ; kế hoạch","NHẤT định DO HÁ MIỆNG mà gây HOẠ","GA, KAKU","",0],["店","ĐIẾM","cửa hàng, tửu điếm","(占) 广) (店). Đi xem Bói ở dưới mái hiên ( ở 1 cái hắc ĐIẾM","TEN","mise",0],["英","ANH","anh hùng, anh tú, anh tuấn","THẢO muốn làm việc trên trung ƯƠNG thì phải học TIẾNG ANH","EI","",0],["送","TỐNG","tiễn, tống tiễn, tống đạt","送 廴 天 Hộ tống đường tăng đi tây thiên","SOO","oku(ru)",0],["語","NGỮ","ngôn ngữ, từ ngữ","Ngôn NGỮ (語) là thứ dùng để Nói (言 NGÔN) và nó có 5 (五 NGŨ) nguyên âm [a i u e o].","GO","kata(ru), kata (rau)",0],["切","THIẾT","cắt, thiết thực, thân thiết","dùngBẨY thanh DAO cắt bỏ","SETSU, SAI","ki(ru), ki(reru)",0],["貸","THẢI","cho mượn","Thời đại cho vay tiền","TAI","ka(su)",0],["旅","LỮ","lữ hành, lữ khách","旅 方, Người LỮ hành đi muôn phương Kề Kà bình tĩnh, vì đi cả đời, đi du lịch mà","RYO","tabi",0],["借","TÁ","mượn, tá điền","Từ XƯA NGƯỜI亻 ta đã cho nhau vay mượn.","SHAKU","ka(riru)",0],["教","GIÁO","giáo dục, giáo viên","Thằng Con (子 TỬ) nằm dưới Đất (土 THỔ) và bị Đánh (攵 PHỘC).==> bố mẹ đang Giáo (教) dục con cái.","KYOO","oshi(eru), oso (waru)",0],["勉","MIỄN","miễn cưỡng, cần miễn","MIỄN免 hết sức LỰC力 cũng phải cố gắng","BEN","",0],["習","TẬP","học tập","TẬP bay bằng đôi cánh trắng","SHUU","nara(u)",0],["花","HOA","hoa, bông hoa","Cỏ(艹) Hoá(化) HOA","KA","hana",0],["強","CƯỜNG, CƯỠNG","cường quốc; miễn cưỡng","Dùng cung tên bắn chết 4 (tư) con côn trùng khỏe mạnh","KYOO, GOO","tsuyo(i), tsuyo (maru), tsuyo (meru), shi(iru)",0],["立","LẬP","thiết lập, tự lập","đầu đội trời, chân đạp đất, đứng dậy làm nên sự nghiệp","RITSU, RYUU","ta(tsu), ta(teru)",0],["待","ĐÃI","đợi, đối đãi","Đứng cổng Chùa để ĐỢI nhau, rồi cùng vào lễ Phật","TAI","ma(tsu)",0],["止","CHỈ","đình chỉ","Hình ảnh người dựa tường chỉ tay","SHI","to(maru), to (meru)",0],["入","NHẬP","nhập cảnh, nhập môn, nhập viện","người bị ma nhập vào nên đầu quẹo trái","NYUU","i(ru), i(reru), hai (ru)",0],["出","XUẤT","xuất hiện, xuất phát","Xuất khẩu lên Núi trên Núi dưới nhiều nên Xuất ngoại.","SHUTSU, SUI","de(ru), da(su)",0],["売","MẠI","thương mại","diện士 Khăn冖 儿Bán売 kẻ Sỹ cũng có lúc phải đem Đi","BAI","u(ru), u(reru)",0],["使","SỬ, SỨ","sử dụng; sứ giả, thiên sứ","Là 1 người (NHÂN) thì phải nhớ lại (LẠI) lịch sử (SỬ) của đất nước","SHI","tsuka(u)",0],["明","MINH","quang minh, minh tinh","MẶT TRĂNG MẶT TRỜI chiếu suốt đêm ngày nên lúc nào cũng SÁNG","MEI, MYOO","a(kari), aka (rui), aka (rumu), aka (ramu), aki (raka), a(keru), a(ku), a(kuru), a(kasu)",0],["作","TÁC","tác phẩm, công tác, canh tác","Người cầm CÀO làm việc","SAKU, SA","tsuku(ru)",0],["暗","ÁM","ám sát","đứng (立)giữa hai ngày 日 là 1 Đêm tối ( ám 暗)","AN","kura(i)",0],["広","QUẢNG","quảng trường, quảng đại","Mái nhà (广) 4m (厶 nhìn giống số 4) là rộng (広)","KOO","hiro(i), hiro (maru), hiro (meru), hiro (garu), hiro (geru)",0],["少","THIẾU, THIỂU","thiếu niên; thiểu số","đã nhỏ rồi còn cắt bỏ -> thiếu là chắc","SHOO","suku(nai), suko (shi)",0],["多","ĐA","đa số","Nhiều gấp 2 lần của chữ nhiều 夕 (たくさん) nghĩa là ĐA","TA","oo(i)",0],["長","TRƯỜNG, TRƯỞNG","trường giang, sở trường; hiệu trưởng","Nhìn vào ba nét 687 sẽ giống chữ Ly => Bạn Ly tóc Dài chải Lược có ba răng","CHOO","naga(i)",0],["短","ĐOẢN","đoản mệnh, sở đoản","ở khoảng cách NGẮN thì mũi TÊN mới có thể bắn trúng hạt ĐẬU","TAN","mijika(i)",0],["悪","ÁC, Ố","hung ác, độc ác; tăng ố","có cái suy nghĩ trong tâm muốn khâu mồm亜 người khác là rất độc ác","AKU, O","waru(i)",0],["重","TRỌNG, TRÙNG","trọng lượng; trùng phùng","Người ta cho rằng chiếc xe ( 車 ) có thêm hai cái bánh rất quan TRỌNG ( 重い )","JUU, CHOO","e, omo(i), kasa (neru), kasa (naru)",0],["軽","KHINH","khinh suất, khinh khi","Vừa có Xe Vừa có Đât nên người ta không dám Khinh.","KEI","karu(i), karo (yaka)",0],["早","TẢO","sớm, tảo hôn","Ngày日 phải dậy trước 10十 h là sớm","SOO, SAQ","haya(i), haya (maru), haya (meru)",0],["便","TIỆN","thuận tiện","nếu con NGƯỜI có đôi CÁNH thì TIỆN lợi quá..","BEN, BIN","tayo(ri)",0],["元","NGUYÊN","gốc","thời Nguyên thủy chỉ có Adam Eva 2 二 người đi 儿 với nhau thôi","GEN, GAN","moto",0],["気","KHÍ","không khí, khí chất, khí khái, khí phách","tạo được ra hơi nước ( 气) thì phải có tài nghệ(乂) tinh thần (気) tập trung cao độ","KI, KE","",0],["親","THÂN","thân thuộc, thân thích, thân thiết","ĐỨNG trên CÂY nhìn xem người thân của mình ở đâu","SHIN","oya, shita(shii), shita(shimu)",0],["有","HỮU","sở hữu, hữu hạn","Sở HỮU e Nguyệt 10 năm","YUU, U","a(ru)",0],["名","DANH","danh tính, địa danh","buổi TỐI MIỆNG xưng DANH với thiên hạ.","MEI, MYOO","na",0],["地","ĐỊA","thổ địa, địa đạo","đất đai (土 THỔ) trên THẾ giới (世) được chia thành nhiều ĐỊA bàn (地) khác nhau.","CHI, JI","",0],["仕","SĨ","làm việc","Chiến Sĩ (士) đang Đứng (亻)Để làm Việc (仕) cao cả, là bảo vệ Tổ Quốc.","SHI, JI","tsuka(eru)",0],["事","SỰ","sự việc","Một cái miệng uốn lưỡi 3 lần mới thành sự","JI, ZU","koto",0],["東","ĐÔNG","phía đông","mặt trời 日mọc sau rặng cây 木","TOO","higashi",0],["西","TÂY","phương tây","Một trong 4 四 hướng là hướng tây","SEI, SAI","nishi",0],["北","BẮC","phương bắc","Hai người ngồi đối lưng vào nhau bởi vì phương Bắc rất lạnh","HOKU","kita",0],["南","NAM","phương nam","ở Biên giới phía Nam có 10 ¥ (yên) Nhật","NAN, NA","minami",0],["夜","DẠ","ban đêm, dạ cảnh, dạ quang","NGƯỜI TA đi đêm bị xoa ĐẦU","YA","yo, yoru",0],["京","KINH","kinh đô, kinh thành","Kinh đô là đầu não của đất nước, có những cái miệng nhỏ","KYOO, KEI","",0],["料","LIỆU","nguyên liệu, tài liệu, nhiên liệu","lấy cái Đấu cân Gạo Liệu có đúng ko nhỉ","RYOO","",0],["理","LÍ","lí do, lí luận, nguyên lí","vua ra chính sách ruộng đất hợp lý.","RI","",0],["降","GIÁNG, HÀNG","giáng trần; đầu hàng","Đống đất bị Giáng xuống SAU NĂM nay.","KOO","o(riru), o(rosu), fu(ru)",0],["曜","DIỆU","ngày trong tuần","Chim kêu ヨヨ cả ngày 日 thật vi DIỆU","YOO","",0],["思","TƯ","nghĩ, suy tư, tư tưởng, tư duy","Mảnh ruộng là nơi gửi gắm tâm tư, suy nghĩ của người nông dân","SHI","omo(u)",0],["寝","TẨM","ngủ","Thị Tẩm vào trong nhà 宀 đi yo 彐 giường (丬) trùm khăn 冖 lại 又 rồi ngủ 寝 chung với hoàng thượng :V","SHIN","ne(ru), ne (kasu)",0],["終","CHUNG","chung kết, chung liễu","Chuyện tình ta như sợi chỉ糸 đến mùa đông冬 là kết thúc","SHUU","o(waru), o(eru)",0],["同","ĐỒNG","đồng nhất, tương đồng","(冂) (同) (口) (一) Chữ Quynh cũng Giống chữ Khẩu nếu thêm một nét Nhất ở dưới.","DOO","ona(ji)",0],["知","TRI","tri thức, tri giác","Lời nói đã nói ra như mũi tên đã bắn đi vì vậy hãy thể hiện được tri thức của mình trong lời ăn tiếng nói","CHI","shi(ru)",0],["漢","HÁN","hảo hán","cho nước 氵 và cỏ 艹 vào miệng 口 chồng 夫 người hán 漢","KAN","",0],["字","TỰ","chữ, văn tự","dưới mái nhà đứa trẻ Tự học Chữ","JI","aza",0],["図","ĐỒ","bản đồ, đồ án, địa đồ","BẢN ĐỒ là NGHỆ 乂thuật vẽ những thứ tinh VI囗","ZU, TO","haka(ru)",0],["館","QUÁN","đại sứ quán, hội quán","QUAN to có mũ đội đầu, nay mở QUÁN THỰC lại càng giàu thêm","KAN","",0],["町","ĐINH","khu phố","ra Ruộng (田) bị dẫm phải Đinh (丁) phải lên Thị Trấn (町) tìm bác sĩ.","CHOO","machi",0],["銀","NGÂN","ngân hàng, ngân lượng, kim ngân","(金) (艮).Vàng (銀) ..性.. Vàng không Tốt giả, bị Ngân hàng thu hồi.","GIN","",0],["住","TRÚ, TRỤ","cư trú; trụ sở","NGƯỜI ĐỨNG (ィ) cạnh ÔNG CHỦ (主）thì luôn có chỗ TRÚ (住) thân","JUU","su(mu), su (mau)",0],["度","ĐỘ","mức độ, quá độ, độ lượng","Vắt chéo hai tay (又) độ (度) 20 lần (廿) dưới mái nhà (广)","DO, TO, TAKU","tabi",0],["服","PHỤC","y phục, cảm phục, phục vụ","chị nguyệt 月 ngồi may trang PHỤC trong đêm trăng","FUKU","",0],["着","TRƯỚC","đến, đáo trước, mặc","Mắt nhìn con dê mặc áo","CHAKU, JAKU","ki(ru), k(seru), tsu(ku), tsu (keru)",0],["持","TRÌ","cầm, duy trì","1 tay trụ trì cầm cả ngôi chùa","JI","mo(tsu)",0],["楽","LẠC, NHẠC","an lạc, lạc thú, âm nhạc","khi MẶT TRỜI lên trên đỉnh ngọn CÂY tỏa ra nhiều ánh nắng cũng là lúc chúng ta về nhà nghỉ trưa tận hưởng LẠC thú","GAKU, RAKU","tano(shii), tano (shimu)",0],["夏","HẠ","mùa hè","Có Một thứ (一) luôn Tự (自) Theo Sau (夂) mình.> ám chỉ cái bóng, luôn xuất hiện vào mùa Hạ (夏). Do có nhiều nắng","KA, GE","natsu",0],["春","XUÂN","mùa xuân, thanh xuân","Mùa xuân có 3 ngày quan trọng ( 3 ngay tet)với mọi người","SHUN","haru",0],["秋","THU","mùa thu","vào màu Thu người ta sẻ dùng Lữa để đốt rơm","SHUU","aki",0],["冬","ĐÔNG","mùa đông","(冬), (夂) (丶丶) vào mùa Đông Theo sau mình sẽ có những dấu chân in dưới tuyết.","TOO","fuyu",0],["道","ĐẠO","đạo lộ, đạo đức, đạo lí","người ĐẠO mạo (道貌) bước đi dài (廴) đầu ( 首) ngẩng cao","DOO, TOO","michi",0],["堂","ĐƯỜNG","thực đường, thiên đường","Hoà THƯỢNG từ đông THỔ là ĐƯỜNG tăng","DOO","",0],["建","KIẾN","kiến thiết, kiến tạo","Kiến 建 trúc sư đi 3 ngày 3 đêm 廴 vẽ nhà bằng cây bút 聿","KEN, KON","ta(teru), ta(tsu)",0],["病","BỆNH","bệnh nhân, bệnh viện, bệnh tật","Trong người (内 NỘI) mà bị Ốm (疒 NẠCH). Lưu ý","BYOO, HEI","ya(mu), yamai",0],["院","VIỆN","học viện, y viện","cái Nhà (宀) giúp phục hồi NGUYÊN khí (元) đó chính là bệnh VIỆN (院)。","IN","",0],["体","THỂ","hình thể, thân thể, thể thao","người(亻) mà nhiều như cây(本) gọi là tập THỂ","TAI, TEI","karada",0],["運","VẬN","vận chuyển, vận mệnh","quân軍 đội vận chyển lương thực bằng xe ĐƯỜNG dài","UN","hako(bu)",0],["乗","THỪA","lên xe","Cưỡi lên 1000 cái CÂY thật là THỪA hơi","JOO","no(ru), no (seru)",0],["家","GIA","gia đình, chuyên gia","Khi người con trai mang đồ sính lễ là Thủ Lợn (豕) đến Nhà (宀) người con gái.=> một Gia đình (家) mới được hình thành","KA, KE","ie, ya",0],["族","TỘC","gia tộc, dân tộc, chủng tộc","NẰM bắn TÊN là PHƯƠNG pháp của GIA tộc.","ZOKU","",0],["内","NỘI","nội thành, nội bộ","Người (人 NHÂN) đi qua Biên Giới (冂 QUYNH)=> để làm NỘI (内) gián","NAI, DAI","uchi",0],["兄","HUYNH","phụ huynh","bọn Nhi đồng (儿) mở Mồm ra (口) là gọi Anh trai (兄). ( lúc gây sự đánh nhau với đứa khác)","KEI, KYOO","ani",0],["姉","TỈ","chị gái","Chị là con gái thành thị","SHI","ane",0],["弟","ĐỆ","đệ tử","thằng e trai nghịch có sừng có đuôi cầm cung cầm gậy đi quậy phá","TEI, DAI, DE","otooto",0],["妹","MUỘI","em gái","em là con gái vị thành niên","MAI","imooto",0],["海","HẢI","hải cảng, hải phận","Mỗi 毎 ngày nước 氵 đổ ra biển","KAI","umi",0],["部","BỘ","bộ môn, bộ phận","Mồm to ĐỨng Hô Bố Tao làm BỘ trưởng","BU","",0],["計","KÊ, KẾ","thống kê; kế hoạch, kế toán","NÓI ra MƯỜI lần là có KẾ HOẠCH.","KEI","haka(ru), haka (rau)",0],["屋","ỐC","phòng ốc","NHÀ (屋) là VÙNG ĐẤT (土) RIÊNG TƯ (厶) mà khi thành THI thể (尸) vẫn là của bạn","OKU","ya",0],["室","THẤT","phòng, giáo thất","bên dưới là đất, trên đầu là mái nhà thì thoải mái không gian riêng tư","SHITSU","muro",0],["窓","SONG","cửa sổ","Bên SONG cửa sổ là không gian riêng tư của trái tim( nghĩa chữ này là cửa sổ)","SOO","mado",0],["開","KHAI","khai mạc, khai giảng","mở cổng đền (幵 tưởng tượng hình này giống cái cổng đền của nhật)","KAI","hira(ku), hira (keru), a(ku), a (keru)",0],["歌","CA","ca dao, ca khúc","欠 可 歌. Cuộc sống sẽ rất buồn chán nếu Thiếu Khả Năng Ca, Hát","KA","uta, uta(u)",0],["閉","BẾ","bế mạc, bế quan","CỬA門BẾ TÀI才 Đóng (ĐÓNG) quan luyện công mới thành","HEI","to(jiru), to (zasu), shi (meru), shi (maru)",0],["意","Ý","ý nghĩa, ý thức, ý kiến, chú ý","âm thanh (ÂM) phát ra từ tâm (TÂM) chính là ý chí (Ý)","I","",0],["味","VỊ","vị giác, mùi vị","Dùng miệng nếm thử mùi vị của cây và đất","MI","aji, aji(wau)",0],["天","THIÊN","thiên thạch, thiên nhiên, thiên đường","Thứ to 大 lớn nhất 一 chính là ông trời 天","TEN","ame, ama",0],["考","KHẢO","khảo sát, tư khảo","nằm trên đất suy nghĩ ra 5 Ý TƯỞNG","KOO","kanga(eru)",0],["試","THÍ","thí nghiệm, thí điểm","Tôi sẻ NÓI qua về hình THỨC thực hiện THÍ NGHIỆM này","SHI","kokoro(miru), tame(su)",0],["験","NGHIỆM","thí nghiệm, hiệu nghiệm, kinh nghiệm","人 馬 合 Người chọn được con ngựa phù hợp với mk là người có kinh nghiệm","KEN, GEN","",0],["問","VẤN","vấn đáp, chất vấn, vấn đề","Đứng giữa cửa (môn) 門 dùng miệng (khẩu) 口 tra hỏi (Vấn) 問","MON","to(u), to(i), ton",0],["題","ĐỀ","đề tài, đề mục, chủ đề","cầm tờ giấy chạy lên mặt trời để hỏi các vấn đề","DAI","",0],["答","ĐÁP","trả lời, vấn đáp, đáp ứng","hợp合 tre竹 Thấy lý thì trả lời bằng cách ghi lên đốt","TOO","kota(eru), kota (e)",0],["用","DỤNG","sử dụng, dụng cụ, công dụng","Sử dụng gậy để chọc mặt trăng月","YOO","mochi(iru)",0],["台","ĐÀI","lâu đài, đài, đồi cao, bục cao","Tượng đài là nơi mọi người tụ tập nói口 chuyện riêng tư厶","DAI, TAI","",0],["始","THỦY","ban đầu, khai thủy, nguyên thủy","(始め) TƯ(厶) (口) Trước khi BẮT ĐẦU một việc gì, hãy nghe những lời tâm từ MIỆNG NGƯỜI PHỤ NỮ (女 bạn yêu thương!","SHI","haji(meru), haji (maru)",0],["集","TẬP","tập hợp, tụ tập","Chim tập hợp trên cây","SHUU","atsu(maru), atsu(meru), tsudo(u)",0],["研","NGHIÊN","mài, nghiên cứu","开 石 研 Mở viên đá ra để nghiên cứu","KEN","to(gu)",0],["究","CỨU","nghiên cứu, cứu cánh","nghiên cứu 9 năm trong hang","KYUU","kiwa(meru)",0],["飯","PHẠN","cơm","việc ĂN thường bị PHẢN ĐỐI nhiều -- là CƠM vì gây mập","HAN","meshi",0],["場","TRƯỜNG","hội trường, quảng trường","trên là trời , dưới là đất giữa là đống vật liệu xây dựng =) đây là công trường","JOO","ba",0],["正","CHÍNH","chính đáng, chính nghĩa, chân chính","Nhất (-) dương chỉ (止) đã dùng là chính xác 正","SEI, SHOO","tada(shii), tada (su), masa",0],["世","THẾ","thế giới, thế gian, thế sự","nhìn gần giống với chữ (せ) trong せかい thế giới","SEI, SE","yo",0],["界","GIỚI","thế giới, giới hạn, địa giới","Bán đất田 bán nhà để đi du lịch thế giới","KAI","",0],["急","CẤP","khẩn cấp, cấp cứu","Cứ(Kuク) Dô(Yoヨ) tình(心) tâm vs chồng đang bị Cấp cứu trong bệnh viện","KYUU","iso(gu)",0],["特","ĐẶC","đặc biệt, đặc công","Con bò được nuôi trên chùa thì quả thật Đặc biệt","TOKU","",0],["洋","DƯƠNG","đại dương, tây dương","Con cừu tắm dưới đại Dương","YOO","",0],["不","BẤT","bất công, bất bình đẳng, bất tài","KHÔNG phải chữ T. Cây (木) bị bẻ ngọn sinh ra BẤT (不) mãn cho người trồng.","","",0],["絵","HỘI","hội họa","tơ糸 hội会 Ngày xưa tranh thêu từ sợi => sợi tơ tụ tạo thành tranh","KAI, E","",0],["議","NGHỊ","nghị luận, nghị sự","Trong hội NGHỊ k đc phép NÓI lời vô NGHĨA","GI","",0],["辞","TỪ","từ vựng, từ chức","Cái lưỡi TỪ bỏ món ăn CAY","JI","ya(meru)",0],["柔","NHU","nhu nhuyễn","Cây mâu làm từ gỗ nên mềm dẻo","JUU, NYUU","yawa(raka), yawa(rakai)",0],["駐","TRÚ","đồn trú","Con ngựa mà ở gần ông chủ thì lúc nào cũng có chổ trú","CHUU","",0],["帽","MẠO","cái mũ","Chỉnh cái nón帽cho Cân巾, khỏi MẶT TRỜI (日), chiếu vào MẮT( 目)。 Lấy khăn thay mũ che ánh nắng mặt trời khỏi chói mắt","BOO","",0],["湯","THANG","nước nóng","Nước để dưới mặt trời (陽) thì nóng là điều tất nhiên","TOO","yu",0],["横","HOÀNH","tung hoành, hoành độ, hoành hành","có CÂY VÀNG thì rất HOÀNH tráng","OO","yoko",0],["遠","VIỄN","viễn phương, vĩnh viễn","bước đi (XƯỚC) thật xa (VIỄN) khỏi vùng đất (THỔ) có những cái miệng (KHẨU) ba (ba nét 7-8-10) phải (nét 9) Khi mặc áo dài lê thê [袁(VIÊN)] ta ko thể bước đi [辶(Sước)] xa [遠(Viễn)]","EN, ON","too(i)",0],["欲","DỤC","dục vọng","DỤC ( 欲) vọng lòng tham của con người như thung lũng (谷) không (欠) đáy","YOKU","hos(suru), ho (shii)",0],["遅","TRÌ","muộn","1 con DÊ cứ nấp sau cánh CỔNG không dám BƯỚC ĐI ra đường nên gây MUỘN cho cả đàn","CHI","oku(reru), oku (rasu), oso(i)",0],["景","CẢNH","cảnh sắc, thắng cảnh, quang cảnh","MẶT TRỜI mọc trên KINH đô có phong CẢNH rất đẹp","KEI","",0],["声","THANH","âm thanh, thanh điệu","Binh SĨ thấy xác chết (THI) kêu thất THANH.","SEI, SHOO","koe, kowa",0],["所","SỞ","trụ sở","ấy cái Búa (斤) phá cửa ( 戸)> bị bắt lên Sở (所) cảnh sát。(thắng trộm).","SHO","tokoro",0],["具","CỤ","công cụ, dụng cụ","Chặt đôi bảo bối làm dụng cụ Chặt đôi bảo bối làm dụng cụ","GU","",0],["昔","TÍCH","ngày xưa","ngày XƯA NGÀY 日NGÀY cầm tay nhau (cid:0) đi chơi","SEKI, SHAKU","mukashi",0],["夢","MỘNG","mơ","thảo nằm trên võng ngủ đến đêm tối","MU","yume",0],["回","HỒI","vu hồi, chương hồi","(口) (囗) (回) Khẩu với Vi nhìn một Hồi mà vẫn chưa phân biệt được.","KAI, E","mawa(ru), mawa(su)",0],["泳","VỊNH","bơi","song thủy(氵水） hóa VỊNH泳 đầy","EI","oyo(gu)",0],["座","TỌA","chỗ ngồi, tọa đàm, tọa độ","trong nhà có 2 người ngồi tòa đàm dưới đất","ZA","suwa(ru)",0],["役","DỊCH","chức vụ, nô dịch","Chiến dịch lên đường đánh kẻ thù","EKI, YAKU","",0],["形","HÌNH","hình thức, hình hài, định hình","Chắp tay tạo hình幵 kiểu tóc彡","KEI, GYOO","kata, katachi",0],["品","PHẨM","sản phẩm","Nhân phẩm con người không thể đánh giá qua 3 cái mồm .","HIN","shina",0],["慣","QUÁN","tập quán","Trong thâm Tâm lúc nào cũng phải có Tiền bạc, Ruộng đất là tập Quán của người VN","KAN","na(reru), na (rasu)",0],["説","THUYẾT","tiểu thuyết, học thuyết, lí thuyết","NGÔN từ của HUYNH như TIỂU THUYẾT vậy","SETSU, ZEI","to(ku)",0],["将","TƯỚNG","tướng quân","tương lai chỉ Lấy móng tay cào vào tường thì TƯƠNG đối thốn","SHOO","",0],["熱","NHIỆT","nhiệt độ, nhiệt tình","TRƯỚC khi chết trở về với ĐẤT bị đôt HOÀN Toàn dưới NHIỆT Độ cao","NETSU","atsu(i)",0],["眠","MIÊN","thôi miên","DÂN民 nhắm MẮT ngủ MIÊN man","MIN","nemu(ru), nemu(i)",0],["優","ƯU","ưu việt, ưu thế, ưu tiên","NGƯỜI mà con TIM ƯU tư cả TRĂM lần chắc chắn là người HIỀN LÀNH","YUU","yasa(shii), sugu(reru)",0],["選","TUYỂN","tuyển chọn","cần TUYỂN 22 tk CỘNG tác viên","SEN","era(bu)",0],["通","THÔNG","thông qua, thông hành, phổ thông","Dũng cảm thông qua đường","TSUU, TSU","too(ru), too (su), kayo(u)",0],["経","KINH","kinh tế, sách kinh, kinh độ","Sợi CHỉ LẠI rơi đầy xuống ĐẤT nhìn KiNH quá","KEI, KYOO","he(ru)",0],["喫","KHIẾT","uống, hút","MIỆNG SINH ra những lời ĐAO TO búa lớn sẽ rất đói khát.","KITSU","",0],["辺","BIÊN","biên, biên giới","ĐI qua đường BIÊN giới sẻ ăn ĐAO","HEN","ata(ri), be",0],["神","THẦN","thần, thần thánh, thần dược","THẦN 神 ít khi hiển THỊ ネ THÂN 申","SHIN, JIN","kami, kan, koo",0],["凄","THÊ","Doạ, đe doạ, hăm doạ","THÊ tử mà Lạnh lùng như Băng thì thật là KINH KHỦNG. Sugoi","","",0],["忘","VONG","quên","Con tim心 chỉ khi chết亡 đi sẽ quên được mọi thứ","BOO","wasu(reru)",0],["側","TRẮC","bên cạnh","Đao (刂) là bảo Bối (貝)mang bên Người (亻) để đề phòng bất Trắc (側)","SOKU","kawa",0],["落","LẠC","rơi, lạc hạ, trụy lạc","Nghe Các vị bị Lạc xuống vực kể rằng: đã lấy nước từ cỏ để uống","RAKU","o(chiru), o (tosu)",0],["消","TIÊU","tiêu diệt, tiêu hao, tiêu thất","trăng nhỏ trong nước có thể bị tiêu biến","SHOO","ki(eru), ke(su)",0],["汚","Ô","ô nhiễm","Nước bẩn ngập cổ số 5","O","kega(su), kega (reru), kega (rawashii), yogo(su), yogo (reru), kitana(i)",0],["割","CÁT","chia cắt, cát cứ","Đưa dao cắt khẩu sinh trong nhà","KATSU","wa(ru), wari, wa(reru), sa (ku)",0],["全","TOÀN","toàn bộ","Vua là người toàn vẹn","ZEN","matta(ku)",0],["陽","DƯƠNG","thái dương","Mặt Trời (日 NHẬT) đang tỏa ánh nắng (勿) xuống Gò Đất (阝 PHỤ)=> nơi trồng rất nhiều hoa hướng Dương (陽)","YOO","",0],["隅","NGUNG","góc","Mẹ chửi","GUU","sumi",0],["机","CƠ","cái bàn","Chân cây làm bàn","KI","tsukue",0],["引","DẪN","dẫn hỏa","Có CUNG với GẬY có thể DẪN dắt đần e đi đánh nhau","IN","hi(ku), hi(keru)",0],["箱","TƯƠNG","cái hộp","Cái hộp làm từ mắt cây trúc","","hako",0],["予","DỰ","dự đoán, dự báo","Maマ Thường DƯ 1 mắt","YO","",0],["定","ĐỊNH","thiết định, quyết định, định mệnh","1 người đang Thiền ĐỊNH ở Chính giữa nhà","TEI, JOO","sada(meru), sada(maru), sada(ka)",0],["冷","LÃNH","lạnh, lãnh đạm","con MA ngồi dưới mái nhà nên cả nhà lạnh toát cả hơi nước","REI","tsume(tai), hi (eru), hi(ya), hi (yasu), hi (yakasu), sa (meru), sa (masu)",0],["置","TRÍ","bố trí, bài trí, vị trí","Đặt cái VÕNG vào đấy rồi bố TRÍ người nằm TRỰC","CHI","o(ku)",0],["掛","QUẢI","treo","tay(扌) to(ト)mới Quải(掛) được 2 mảnh đất(土)","","ka(keru), ka (karu), kakari",0],["復","PHỤC","phục thù, hồi phục","Con đường này có một người dùng nguyên một ngày để phục hồi lại","FUKU","",0],["約","ƯỚC","lời hứa (ước nguyện), ước tính","(糸) (勹) (約). Dùng Chỉ thêu Bao thơm tặng anh ý, rồi trao cho nhau những lời hẹn Ước","YAKU","",0],["空","KHÔNG","không khí, hư không, hàng không","Công trường (工) ở trong Hang Động (穴)=> bị thiếu Không khí (空)","KUU","sora, a(ku), a (keru), kara",0],["港","CẢNG","hải cảng, không cảng","Lối đi tắt (hạng) ra biển (thuỷ) gọi là CẢNG","KOO","minato",0],["務","VỤ","chức vụ, nhiệm vụ","cầm Giáo (矛 MÂU) Đánh (攵 PHỘC) với LỰC (力) mạnh ==> gây ra 1 Vụ án mạng (務), tạo công việc cho cảnh sát","MU","tsuto(meru)",0],["園","VIÊN","vườn, điền viên, hoa viên, công viên","công viên là vùng đất mà mọi người mặc áo đẹp nói chuyện với nhau","EN","sono",0],["飛","PHI","bay, phi công, phi hành","anh Thăng升 bị 2 cái giày cao gót PHI thẳng vào mặt","HI","to(bu), to (basu)",0],["機","CƠ","cơ khí, thời cơ, phi cơ","máy móc, động cơ)","KI","hata",0],["普","PHỔ","phổ thông","Xếp hàng là việc PHỔ biến hằng ngày ở Nhật","FU","",0],["式","THỨC","hình thức, phương thức, công thức","Nghi Thức gả Công工 chúa cho Giặc弋","SHIKI","",0],["受","THỤ","nhận, tiếp thụ","lại又nhận受được cái khăn 冖thêu hình móng tay爫","JU","u(keru), u (karu)",0],["卒","TỐT","tốt nghiệp","12 Người TỐT nghiệp Đầu tiên","SOTSU","",0],["業","NGHIỆP","nghề nghiệp, công nghiệp, sự nghiệp","Nghề nghiệp của tôi là mặc bộ đồ con cừu,đội mũ 4 gạch với 2 cái chân","GYOO, GOO","waza",0],["連","LIÊN","liên tục, liên lạc","ngày xưa dùng XE ngựa chạy khắp nơi để LIÊN lạc với nhau","REN","tsura(naru), tsura(neru), tsu(reru)",0],["残","TÀN","tàn dư, tàn tích, tàn đảng","Hai (二) cây binh khí (戈) bắt chéo nhau, ở dưới có 1 bộ Xương Mục (歹)=> đây là Tàn dư (残) của cuộc chiến.","ZAN","noko(ru), noko (su)",0],["風","PHONG","phong ba, phong cách, phong tục","Gió (PHONG) mạnh quá nên CÔN TRÙNG chui hết dưới gầm Ghế","FUU, FU","kaze, kaza",0],["星","TINH","hành tinh, tinh tú","Các ngôi sao được sinh ra từ mặt trời","SEI, SHOO","hoshi",0],["雪","TUYẾT","tuyết","Mưa tuyết rơi dày 3 lớp.","SETSU","yuki",0],["牛","NGƯU","con trâu","Giờ Ngọ bị cắm sừng thành Con Bò","GYUU","ushi",0],["乳","NHŨ","nhũ mẫu","Loài hữu nhũ là những loài có đặc điểm như sau: 1. Có móng爫, 2. Đẻ con子 , 3. Có đuôi乙","NYUU","chichi, chi",0],["最","TỐI","nhất (tối cao, tối đa)","Thằng nào lấy 取 mẹ mặt trời 日 bảo sao k TỐI","SAI","motto(mo)",0],["勝","THẮNG","thắng lợi, thắng cảnh","Đêm Trăng 2 Người nỗ Lực phải THẮNG chứng Khoán","SHOO","ka(tsu), masa (ru)",0],["負","PHỤ","âm, mang, phụ thương, phụ trách","Thua nên đồng tiền phụ bạc đội nón ra đi.","FU","ma(keru), ma (kasu), o(u)",0],["続","TỤC","tiếp tục","TIếp TỤC bán CHỈ","ZOKU","tsuzu(ku), tsuzu(keru)",0],["直","TRỰC","trực tiếp, chính trực","trực chờ với 10 con mắt.","CHOKU, JIKI","tada(chini), nao(su), nao (ru)",0],["治","TRỊ","cai trị, trị an, trị bệnh","muốn TRỊ được tính hám trai của con THỦY thì phải đầu THAI mới hết.. Mà muốn hết thì phải lên đoạn đầu ĐÀI(ĐÀI và THAI là台)","CHI, JI","osa(meru), osa (maru), nao (ru), nao(su)",0],["登","ĐĂNG","trèo, đăng sơn, đăng kí, đăng lục","BÁT癶 ĐẬU豆 ĐĂNG KÝ sẽ được","TOO, TO","nobo(ru)",0],["戻","LỆ","quay lại","Việc trọng đại mới quay lại cửa lấy đồ","REI","modo(ru), modo(su)",0],["付","PHỤ","phụ thuộc, phụ lục","PHÓ 付 giám đốc là người 亻THÊM việc thật là THỐN 寸 cho tôi ..","FU","tsu(keru), tsu (ku)",0],["交","GIAO","giao hảo, giao hoán","Bố đội mũ tham gia giao thông","KOO","maji(waru), maji(eru), maji (ru), ma(zaru), ma(zeru), ka (u), ka(wasu)",0],["席","TỊCH","chủ tịch, xuất tịch (tham gia)","ĐẦU TRÂU trong NHÀ chủ TỊCH được phủ tấm KHĂN lên làm ghế","SEKI","",0],["荷","HÀ","hành lí","THẢO xách hành lý dùm chị HÀ","KA","ni",0],["以","DĨ","dĩ tiền, dĩ vãng","T (tình) Y (yêu) => 2 chữ T và Y ngược, nghĩa là Tình Yêu đã trôi vào Dĩ vãn","I","",0],["触","XÚC","tiếp xúc","Chạm vào Xúc Giác角 của công Trùng","SHOKU","fu(reru), sawa (ru)",0],["吸","HẤP","hô hấp, hấp thu","3 người hô hấp bằng miệng","KYUU","su(u)",0],["伝","TRUYỀN, TRUYỆN","truyền đạt, truyền động; tự truyện","Người làm 24h truyền tin","DEN","tsuta(waru), tsuta(eru), tsuta(u)",0],["投","ĐẦU","đầu tư, đầu cơ","投げ捨て Lấy TAY chặt đầu kẻ THÙ rồi ném đi","TOO","na(geru)",0],["曲","KHÚC","ca khúc","Kẻ vở ra 6 ô để viết khúc nhạc","KYOKU","ma(garu), ma (geru)",0],["塩","DIÊM","muối","Người dùng miệng liếm muối dưới đất cho vào đĩa (ấn tượng mạnh cho dễ nhớ)","EN","shio",0],["番","PHIÊN","thứ tự, phiên hiệu","đến phiên đếm số gạo trên đồng","BAN","",0],["号","HIỆU","phiên hiệu, tín hiệu, phù hiệu","miệng hô khẩu hiệu 5 lần","GOO","",0],["甘","CAM","ngọt, cam chịu","20 廿 thùng cam甘 ngọt. Bắc thang lên hái cam ngọt","KAN","ama(i), ama (eru), ama (yakasu)",0],["辛","TÂN","cay","MƯỜi lần đứng cay đắng. Người đứng trên cây thập tự giá chịu nhiều cay đắng","SHIN","kara(i)",0],["苦","KHỔ","khổ cực, cùng khổ","Già CỔ lỗ sĩ rồi mà phải nằm ở bãi cỏ ngủ thì KHỔ lắm","KU","kuru(shii), kuru (shimu), kuru (shimeru), niga (i), niga(ru)",0],["細","TẾ","tinh tế, tường tế, tế bào","(糸) đất(田) (細) Dùng sợi dây đo đạt, phân cách ruộng thật tinh TẾ","SAI","hoso(i), hoso (ru), koma(ka), koma(kai)",0],["踊","DŨNG","nhảy múa","bước chân DŨNG mãnh NHẢY qua hàng rào","YOO","odo(ru), odo(ri)",0],["磨","MA","mài","Lấy đá trong rừng đánh bóng trong nhà. Hòn đá ma sát","MA","miga(ku)",0],["換","HOÁN","giao hoán","lất Tay Hoán đổi Tứ Đại mỹ nhân","KAN","ka(eru), ka (waru)",0],["質","CHẤT","vật chất, phẩm chất, khí chất","Có tiền sẽ mua được 2 cái đao chất lượng","SHITSU, SHICHI, CHI","",0],["島","ĐẢO","hải đảo","ĐẢO là những quả NÚI nhỏ giữa biển, nới k có con người mà chỉ có CHIM sinh sống","TOO","shima",0],["村","THÔN","thôn xã, thôn làng","ở THÔN cây chỉ cao 1 thốn","SON","mura",0],["葉","DIỆP","lá, lạc diệp, hồng diệp","Cây cối 木 trên Thế Giới 世, trên đỉnh đều có phần màu xanh từ bộ Thảo 艹, gọi là Lá","YOO","ha",0],["緑","LỤC","xanh lục","Bỏ 3 sợi tơ xuống dòng nước tạo ra màu xanh lá","RYOKU, ROKU","midori",0],["活","HOẠT","hoạt động, sinh hoạt","Nghìn cái miệng linh hoạt nói nhiều bắn cả nước bọt tung toé","KATSU","",0],["向","HƯỚNG","hướng thượng, phương hướng","Xung quanh冂 lời nói口 HƯỚNG thiện","KOO","mu(ku), mu (keru), mu (kau), mu(koo)",0],["珍","TRÂN","trân trọng, trân quý","ông VUA đội NÓN tết tóc đuôi SAM rất HIẾM","CHIN","mezura(shii)",0],["変","BIẾN","biến đổi, biến thiên","Chạy nhanh khi màu đỏ biến đổi","HEN","ka(waru), ka (eru)",0],["捨","XẢ","vứt","Dùng tay xả rác trong phố xá舎","SHA","su(teru)",0],["拾","THẬP","nhặt","dùng TAY để tập HỢP các vật lại với nhau","SHUU, JUU","hiro(u)",0],["工","CÔNG","công tác, công nhân","êエ ! CÔNG nhân .","KOO, KU","",0],["記","KÍ","thư kí, kí sự, kí ức","Bản Thân 己 dùng Nhật Kí 記 để ghi lại những Lời 言 hay ý đẹp.","KI","shiru(su)",0],["耳","NHĨ","tai","TAI liền gần với MẮT, nhưng TAI thì chìa ra xung quanh","JI","mimi",0],["歯","XỈ","răng","XỈ răng (bựa) trong MIỆNG (khảm) cần phải dùng CHỈ nha khoa mới sạch được","SHI","ha",0],["野","DÃ","cánh đồng, hoang dã, thôn dã","DỰ định (予) về LÀNG (里), ==> sống một cách dân Dã (野) , nuôi cá và trồng thêm rau.","YA","no",0],["菜","THÁI","rau","(木) (艹 (爫 Những Cây mà mọc chung với cỏ THẢO), dùng móng tay có thể ngắt về TRẢO) đó là Rau (菜 THÁI).","SAI","na",0],["低","ĐÊ","thấp, đê hèn, đê tiện","tên họ 氏 của 1 一 người 人 luôn được ký tên dưới cùng thấp 低い nhất của văn bản","TEI","hiku(i), hiku (meru), hiku (maru)",0],["太","THÁI","thái dương, thái bình","大 丶 太 Đại diện cho Chủ nhân phải là người thông THÁI","TAI, TA","futo(i), futo(ru)",0],["弱","NHƯỢC","nhược điểm, nhược tiểu","kẻ địch vì hai cây cung (CUNG) đều bị đóng băng (BĂNG) nên trở nên yếu (NHƯỢC)","JAKU","yowa(i), yowa (ru), yowa (maru), yowa (meru)",0],["別","BIỆT","biệt li, đặc biệt, tạm biệt","Dùng miệng để phân biệt vạn lưỡi dao","BETSU","waka(reru)",0],["打","ĐẢ","đả kích, ẩu đả","TAY cầm cây ĐINH đi ẩu ĐẢ","DA","u(tsu)",0],["過","QUA, QUÁ","thông qua; quá khứ, quá độ","Vượt quá qua nhà 2 tầng","KA","su(giru), su (gosu), ayama (tsu), ayama (chi)",0],["違","VI","vi phạm, tương vi","(五 年) ven Đường có 1 chữ Khẩu và 2 chữ Năm KHÁC nhau và viết thiếu nét gọi là VI","I","chiga(u), chiga (eru)",0],["必","TẤT","tất nhiên, tất yếu","Con TIM mà bị chém cho một nhát thì TẤT yếu sẽ chết","HITSU","kanara(zu)",0],["寺","TỰ","chùa","đo đất xem được bao nhiêu thốn để xây chùa","JI","tera",0],["船","THUYỀN","thuyền","Thuyền nhỏ Chu du 舟 qua 8 八 cửa Khẩu口 thành Thuyền lớn 船","SEN","fune, funa",0],["械","GIỚI","cơ giới","những cây木gỗ cũng 廾được vận chuyển qua 戈biên giới 械","KAI","",0],["呼","HÔ","gọi tên, hô hoán, hô hấp, hô hào","Miệng hô vang HÒA bình","KO","yo(bu)",0],["頼","LẠI","ỷ lại","Tôi nhờ anh bó (thúc) LẠI 1 trang (hiệt) giấy","RAI","tano(mu), tano (moshii), tayo (ru)",0],["注","CHÚ","chú ý, chú thích","Rót nước cho ông chủ phải chú ý cẩn thận","CHUU","soso(gu)",0],["格","CÁCH","tư cách, cách thức, sở hữu cách","Mỗi Cây (木) đều có CÁCH để sinh trưởng trong Các (各) môi trường khác nhau","KAKU, KOO","",0],["輸","THÂU","thâu nhập, thâu xuất","Xe trước nhà dùng để vận chuyển hàng nhập khẩu","YU","",0],["枝","CHI","chi nhánh","Chi支của cây 木 là cành","SHI","eda",0],["岸","NGẠN","hải ngạn","Bờ 岸 là nơi va chạm 干 của sườn 厂 núi 山","GAN","kishi",0],["卵","NOÃN","trứng","Giống một quả trứng đang bị tách làm đôi, lòng trắng và lòng đỏ đang chảy xuống (chảo).","RAN","tamago",0],["橋","KIỀU","cây cầu","cầu KIỀU được làm bằng CÂY có độ dài CAO đến TRỜI","KYOO","hashi",0],["冊","SÁCH","quyển sách","Thời xưa sách làm bằng thanh gỗ 4 thanh xếp thành hàng gắn với nhau bởi sợi dây ở giữa","SATSU, SAKU","",0],["製","CHẾ","chế tạo","Cầm dao khống chế 制 con bò 牛 nằm yên trên cái cân","SEI","",0],["無","VÔ","hư vô, vô ý nghĩa","con người này thật VÔ lý đã châm lửa đốt cái hàng rào 4 cột dọc 2dây cột ngang của tôi ...","MU, BU","na(i)",0],["難","NAN, NẠN","khó, nan giải, nguy nan; tai nạn","Chim học hán tự thì quả là gian nan","NAN","kata(i), muzuka(shii)",0],["散","TÁN, TẢN","phấn tán, tản mát","Đêm TRĂNG PHỘC nhau trong bãi CỎ chạy TÁN loạn","SAN","chi(ru), chi (rasu), chi (rakasu), chi (rakaru)",0],["育","DỤC","giáo dục, dưỡng dục","厶Khư, tư : Riêng tư. Tự ta nuôi con khôn lớn qua hàng tháng trời.","IKU","soda(tsu), soda(teru)",0],["亡","VONG","diệt vong","Cái ĐẦU mà chỉ nghĩ tới L sớm muộn cũng CHẾT","BOO, MOO","na(i)",0],["震","CHẤN","địa chấn","Thần (辰) làm mưa (雨) => (震) chấn động đất trời, chấn động lòng người","SHIN","furu(u), furu (eru)",0],["狭","HIỆP","hẹp","loài chó 犭thì suy nghĩ hạn hẹp 夹","KYOO","sema(i), saba (meru), seba (maru)",0],["代","ĐẠI","đại biểu, thời đại, đại diện, đại thế","thời Đại thay đổi, người亻 trở thành Dặc弋","DAI, TAI","ka(waru), ka (eru), yo, shiro",0],["困","KHỐN","khốn cùng","cây sống 1 mình giữa 4 bức tường đúng là khốn khổ","KON","koma(ru)",0],["死","TỬ","chết, tử thi, tự tử","(ー) (タ) (ヒ) CHẾT(死) MỘT mình TA cười hi HI trước khi","SHI","shi(nu)",0],["配","PHỐI","phân phối, chi phối, phối ngẫu","(己) (酉) người quỳ gối phân Phối rượu cho người khác","HAI","kuba(ru)",0],["倒","ĐẢO","đảo lộn","Người mà CHÍ k đạt đc như mong muốn thường dùng DAO để ĐẢO chính, lật đổ","TOO","tao(reru), tao (su)",0],["並","TỊNH","xếp hàng","Đứng xếp thành 2 hàng dọc hai hàng ngag và 1 hàng chữ v","HEI","nami, mara (beru), nara (bu), nara(bini)",0],["勢","THẾ","tư thế, thế lực","tiên sinh có vùng đất hình tròn là có thế lực mạnh","SEI","ikio(i)",0],["途","ĐỒ","tiền đồ","2 cậu bé đội nón đi dọc đường kiếm cơm áo gạo tiền","TO","",0],["都","ĐÔ","đô thị, đô thành","Kinh ĐÔ là nơi tập chung nhiều HỌC GIẢ","TO, TSU","miyako",0],["合","HỢP","thích hợp, hội họp, hợp lí","NGƯỜI có MỘT cái MIỆNG là HỢP lí","GOO, GAQ, KAQ","a(u), a(wasu), a(waseru)",0],["返","PHẢN","trả lại","Có nên mở ĐƯỜNG (辶) cho kẻ PHẢN (反) bội TRỞ LẠI (返)? Đánh kẻ chạy đi chứ không ai đánh người chạy lại…","HEN","kae(su), kae (ru)",0],["次","THỨ","tiếp theo, thứ nam, thứ nữ","những người thiếu nợ 欠 thì lần lượt vào nhà băng 冫cướp tiền","JI, SHI","tsu(gu), tsugi",0],["個","CÁ","cá nhân, cá thể","Mỗi người có 1 tính cách cố định","KO","",0],["危","NGUY","nguy hiểm, nguy cơ","Đứng trên Vách núi thấy con quái vật trong núi rất nguy hiểm","KI","abu(nai), aya (ui), aya(bumu)",0],["険","HIỂM","nguy hiểm, mạo hiểm, hiểm ác","Ở bến xe Bus có người đội nón trông rất nguy hiểm","KEN","kewa(shii)",0],["要","YÊU, YẾU","yêu cầu; chủ yếu","Phụ NỮ phương TÂY chủ YẾU là thích đc YÊU","YOO","i(ru)",0],["決","QUYẾT","quyết định","Quyết 決 tâm tiêu diệt Thuỷ 氵Quái 夬","KETSU","ki(meru), ki (maru)",0],["込","0","đưa vào, đi vào, chứa đựng","入 Nhập vào đường đông","","ko(mu), ko (meru)",0],["発","PHÁT","xuất phát, phát kiến, phát hiện, phát ngôn","2 người cùng trở lại để phát triển","HATSU, HOTSU","",0],["調","ĐIỀU, ĐIỆU","điều tra, điều hòa; thanh điệu, giai điệu","Đi vòng quanh(周り) lẩm bẩm (言う) như kiếm tìm gì đó(調べる)","CHOO","shira(beru), totono(u), totono(eru)",0],["初","SƠ","sơ cấp","Thời SƠ khai muốn may áo phải dùng DAO vì chưa có kéo","SHO","haji(me), haji (mete), hatsu, ui, so(meru)",0],["祝","CHÚC","chúc phúc","CHÚC mừng ANH sống ở thành THỊ","SHUKU, SHUU","iwa(u)",0],["舞","VŨ","vũ điệu, khiêu vũ","ở nhà hát 無 có các vũ công đang múa taco タコ舛","BU","ma(u), mai",0],["産","SẢN","sản xuất, sinh sản, cộng sản","Một người đứng bên vách núi sinh con","SAN","u(mu), u (mareru), ubu",0],["靴","NGOA","giầy","Da革 được biến hoá 化thành giày","KA","kutsu",0],["宿","TÚC","tá túc, kí túc xá","100 người trọ lại trong nhà","SHUKU","yado, yado(ru), yado(su)",0],["祖","TỔ","tổ tiên","tổ tiên họ thị sống trong ngôi nhà 3 tầng","SO","",0],["袋","ĐẠI","cái túi","Y衣 phục thời đại代 này nhìn cứ như cái túi","TAI","fukuro",0],["法","PHÁP","pháp luật, phương pháp","Nước đánh ta trong quá Khứ là nước Pháp","HOO, HAQ, HOQ","",0],["取","THỦ","lấy, nhận","vểnh Tai (耳) Lại (又) 1 lần nữa.=> để Lấy (取 THỦ) thêm thông tin.","SHU","to(ru)",0],["替","THẾ","thay thế, đại thế","Đổi 2 ông chồng trong 1 ngày","TAI","ka(eru), ka (waru)",0],["済","TẾ","kinh tế, cứu tế","anh Văn với chị Nguyệt lấy NƯỚC để làm kinh Tế","SAI","su(mu), su (masu)",0],["政","CHÍNH","chính phủ, chính sách, hành chính","xem chính trị","SEI, SHOO","matsurigoto",0],["律","LUẬT","luật pháp","tự HÀNH luật, VIẾT luật lên giấy (CHÂN TRÁI cầm BÚT là sai LUẬT)","RITSU, RICHI","",0],["際","TẾ","ven, khi, lúc, quốc tế","Tế lễ trên đồi gọi là quốc tế","SAI","kiwa",0],["厚","HẬU","nồng hậu, hậu tạ","Cậu BÉ sinh ra ở SƯỜN ĐỒI có MẶT TRỜI soi rọi lớn lên chắc chắn nhân HẬU","KOO","atsu(i)",0],["薄","BẠC","mỏng, bạc mệnh","Loài cỏ Chuyên sống dưới nước thường Mỏng và Nhạt","HAKU","usu(i), usu (meru), usu (maru), usu (ragu), usu (reru)",0],["包","BAO","bao bọc","Bao勹 thân己 bọc cơ thể bằng cách ôm lấy bản","HOO","tsutsu(mu)",0],["沸","PHÍ","đun sôi","cái gì bị trừ đi, mất đi gọi là phất (弗). nước bị mất đi do bay hơi thì gọi là nước sôi (沸). tương tự chữ phí (費) tiền mất đi gọi là chi phí","FUTSU","wa(ku), wa (kasu)",0],["符","PHÙ","phù hiệu","DỰA vào TRÚC (vật làm tin) để tìm một nửa PHÙ hợp","FU","",0],["枚","MAI","tờ","Đánh攴 cây木 gãy","MAI","",0],["暑","THỬ","hè nóng","Học GIẢ thử đứng dưới ánh nắng MẶT TRỜI với để xem có nóng k","SHO","atsu(i)",0],["寒","HÀN","lạnh","phải nhét thật nhiều cỏ 艹 井 ở dưới mái nhà (cid:0) để chống lạnh (cid:0).","KAN","samu(i)",0],["暖","NOÃN","ấm","日 友 (親友) 爪 暖 Mỗi ngày thức dậy, tôi vs bạn thân cùng nhau luyện long trảo thủ làm nóng người lên","DAN","atata(ka), atata (kai), atata (maru), atata (meru)",0],["涼","LƯƠNG","mát","Kinh đô vảy thêm nước thì mát mẻ","RYOO","suzu(shii), suzu(mu)",0],["咲","TIẾU","nở hoa","Hoa nở lm ô trời 天cười toác cả hai cái mồm口","","sa(ku)",0],["払","PHẤT","trả tiền","tay扌 khư厶 phất lên cứ khư đòi trả tiền","FUTSU","hara(u)",0],["増","TĂNG","tăng gia, tăng tốc","Tăng đất để làm ruộng 2 ngày","ZOO","ma(su), fu (eru), fu(yasu)",0],["迎","NGHÊNH","hoan nghênh, nghênh tiếp","Nghênh đón những cái đĩa CD trên đường","GEI","muka(eru)",0],["頭","ĐẦU","đầu não","ĐẦU như bã ĐẬU ý","TOO, ZU, TO","atama, kashira",0],["顔","NHAN","nhan sắc, hồng nhan","Đứng (立) ở sườn núi (厂) xõa tóc (彡) cầm tờ giấy (頁) che hết cả khuôn mặt (顔)","GAN","kao",0],["髪","PHÁT","tóc","PHÁT hiện thằng Bạn友 có 4 đứa Em Tóc dài","HATSU","kami",0],["倍","BỘI","bội thu, bội số","NGƯỜI mà bán ĐỨNG người khác bằng MỒM thì là đồ BỘI nghĩa","BAI","",0],["由","DO","tự do, lí do","Tự DO cắm cọc trên ruộng","YU, YUU, YUI","yoshi",0],["押","ÁP","ấn","Dùng Tay đảo ngược tự do由 là Áp bức, nắm bắt","OO","o(su), o(saeru)",0],["痛","THỐNG","thống khổ","Người DŨNG cảm đến mấy mà bị ỐM thì trông cũng đau đớn, THỐNG khổ","TSUU","ita(i), ita(mu), ita(meru)",0],["静","TĨNH","bình tĩnh, trấn tĩnh","Sau chiến tranh争 lại thanh青 bình yên tĩnh như xưa","SEI, JOO","shizu, shizu (ka), shizu (maru), shizu (meru)",0],["泣","KHẤP","khóc","Đứng mà chảy nước là khóc","KYUU","na(ku)",0],["笑","TIẾU","cười","(竹) Cây Trúc non (Yểu","SHOO","wara(u), e(mu)",0],["贈","TẶNG","hiến tặng","kínhTẶNG bảo BỐI cho thần ĐẤT và thần MẶT TRỜI","ZOO, SOO","oku(ru)",0],["点","ĐIỂM","điểm số, điểm hỏa","Đốt lửa xem bói mở mồm chỉ điểm","TEN","",0],["曾","TẰNG","Từng. Bèn. Chồng chập (gấp lên).","chồng 8八 cái mặt trời 日 lên nhau","","",0],["速","TỐC","tốc độ, tăng tốc","THÚC giục shipper mang BÓ hoa đi thật NHANH","SOKU","haya(i), haya (meru), sumi (yaka)",0],["念","NIỆM","ý niệm, tưởng niệm","Kỉ NIỆM 念 đó đến bây giờ (Kim) 今 vẫn còn ghi nhớ trong Tim (Tâm) 心.","NEN","",0],["覚","GIÁC","cảm giác, giác ngộ","Ở Trường học Nhìn bằng thị Giác","KAKU","obo(eru), sa (masu), sa (meru)",0],["働","ĐỘNG","lao động","1 người muốn đi XE đóng hộp 重 ( xe ô tô ) thì phải ra sức 力 LAO ĐỘNG kiếm tiền mua","DOO","hatara(ku)",0],["練","LUYỆN","rèn luyện, luyện tập","Đông(東) phương bất bại dùng sợi Chỉ (糸) để Luyện (練) tịch tà kiếm phổ","REN","ne(ru)",0],["絡","LẠC","liên lạc","Ngày xưa liên LẠC(絡) chỉ qua SỢI CHỈ [いと(糸)] bằng cách cho MIỆNG [くち(口)] vào PHÍA SAU [しゅう(夂)] cái hộp","RAKU","kara(mu), kara (maru)",0],["薬","DƯỢC","thuốc","(艹) (楽) (薬) Loại cỏ làm cho thoải mái, dễ chịu thì là thuốc","YAKU","kusuri",0],["彼","BỈ","anh ta","Một ANH CHÀNG chuyên ĐI彳 đổ VỎ皮 bị khinh BỈ.","HI","kare, kano",0],["洗","TIỂN","rửa","Muốn TẨY vết bẩn TRƯỚC tiên phải nhúng vào NƯỚC","SEN","ara(u)",0],["濯","TRẠC","rửa","2 con chim tắm mát kêu yo yo","TAKU","",0],["乾","CAN","khô","Nắng 2 ngày thì người vừa nằm vừa quỳ","KAN","kawa(ku), kawa(kasu)",0],["焼","THIÊU","thiêu đốt","Lửa thiêu đốt 10 cây cỏ và 1 cái ghế","SHOO","ya(ku), ya (keru)",0],["渡","ĐỘ","đi qua, truyền tay","Nhiệt ĐỘ 度ngoài trời thường VƯỢT cao hơn nhiệt ĐỘ dưới nước氵","TO","wata(ru), wata (su)",0],["祭","TẾ","lễ hội","MA(マ) nghi lễ TẾ được chỉ THỊ vào chiều TỐI","SAI","matsu(ru), matsu(ri)",0],["廃","PHẾ","tàn phế, hoang phế","Phát bệnh trong nhà sẽ trở nên tàn Phế","HAI","suta(reru), suta(ru)",0],["報","BÁO","báo cáo, báo thù, báo đáp","hạnh 幸 phúc quá nên ngồi may áo quần đám cưới BÁO hỉ","HOO","muku(iru)",0],["性","TÍNH","tính dục, giới tính, bản tính, tính chất","TÂM sẽ SINH ra TÍNH.","SEI, SHOO","",0],["歳","TUẾ","tuổi, năm, tuế nguyệt","Con Chó (戌 Tuất) Nhỏ (小) Dừng lại (止) ==> tè ở gốc cây vạn TUẾ (歳)","SAI, SEI","",0],["怖","BỐ","khủng bố","Tâm 忄 mềm như vải 布 , hàm ý là tâm dễ lay động","FU","kowa(i)",0],["吹","XÚY","thổi, cổ xúy","THIẾU MỒM để THỔI","SUI","fu(ku)",0],["徒","ĐỒ","môn đồ, đồ đệ","các tín ĐỒ徒 Tẩu走 thoát khỏi Xiềng Xích彳","TO","",0],["息","TỨC","con trai, tử tức","Con TIM mà vẫn TỰ đập đc TỨC là vẫn còn HƠI THỞ","SOKU","iki",0],["娘","NƯƠNG","cô nương","Nàng là người phụ Nữ Lương thiện","","musume",0],["留","LƯU","lưu học, lưu trữ","Lưu lại ở cánh đồng để sửa cây đao bị cong","RYUU, RU","to(meru), to (maru)",0],["君","QUÂN","quân chủ, quân vương","Quân là Em. Em chính là コ+ロ+ナ(君) (コロナ2020)","KUN","kimi",0],["忙","MANG","đa mang","Người ta chỉ BẬN (忙) với bạn khi trong TIM (忄) của họ đã MẤT (亡) đi bạn rồi.","BOO","isoga(shii)",0],["届","GIỚI","đưa đến","Anh Thi đã chết尸 Do 由 chuyển GIỚI","","todo(keru), todo(ku)",0],["遊","DU","du hí, du lịch","ĐỨA TRẺ cầm CỜ đi CHU DU khắp 4 PHƯƠNG","YUU, YU","aso(bu)",0],["久","CỬU","lâu, vĩnh cửu","con Người (人) Cứ (ク) đi tìm những thứ vĩnh Cửu","KYUU, KU","hisa(shii)",0],["灰","HÔI","tro","HOẢ thiêu SƯỜN NÚI thành TRO HÔI","KAI","hai",0],["貿","MẬU","mậu dịch, trao đổi","MẬU dịch là LƯU (留）hành bằng tiền（貝）chứ không phải bằng ruộng(田）","BOO","",0],["存","TỒN","tồn tại, bảo tồn, ôn tồn","Đứa trẻ đang dựng lều để tồn tại","SON, ZON","",0],["階","GIAI","giai cấp, giai tầng","Em bồ (阝) mặc váy TRẮNG (白) ngồi trên TẦNG nhìn xuống thấy GIAI (階) đẹp nên cười hihi (ヒヒ)","KAI","",0],["様","DẠNG","đa dạng, hình dạng","Hình DẠNG 1 con Dê đang uống nước bên gốc cây","YOO","sama",0],["寄","KÍ","kí gửi, kí sinh","Mái nhà( 宀 ) to(大) vậy có khả năng(可) Kí gửi (cầm cố) rất nhiều đồ","KI","yo(ru), yo(seru)",0],["疲","BÌ","mệt","Bệnh 疒 ngoài Da皮 thật Mệt Mỏi","HI","tsuka(reru), tsuka(rasu)",0],["勤","CẦN","chuyên cần, cần lao","Vua trung hoa cần kiệm để tăng thêm sức lực","KIN, GON","tsuto(meru), tsuto(maru)",0],["泊","BẠC","ngủ lại","ở KHÁCH SẠN màu TRẮNG bên bờ biển","HAKU","to(maru), to (meru)",0],["宅","TRẠCH","nhà ở","Dưới MÁI NHÀ có 7 con TRẠCH","TAKU","",0],["段","ĐOẠN","giai đoạn","Bồ Cào đánh nhau với Binh Khí (殳 THÙ)==> bồ cào bị gãy thành nhiều ĐOẠN (段)","DAN","",0],["両","LƯỠNG","hai, lưỡng quốc","LƯỠNG LỰ khi MỘT mình đến NGỌN NÚI ở BIÊN GIỚI","RYOO","",0],["私","TƯ","tư nhân, công tư, tư lợi","禾 厶 厶 禾 Hòa (cây lúa) + Khư (riêng tư). riêng một mình mình cắt lúa ở đồng.> vừa làm vừa hát bài Tôi (私 TƯ) cô đơn :))","SHI","watakushi",0],["郊","GIAO","ngoại ô, giao ngoại","nơi GIAO NHAU giữa các MÔ ĐẤT -- là vùng NGOẠI Ô","KOO","",0],["放","PHÓNG","giải phóng, phóng hỏa, phóng lao","Đánh khắp các Phương để giải Phóng dân tộc","HOO","hana(su), hana (tsu), hana (reru)",0],["拝","BÁI","sùng bái","Tay chắp bái 1 lần 4 cái","HAI","oga(mu)",0],["参","THAM","tham chiếu, tham quan, tham khảo","Trong quá khứ 厶 có 1 ông quan lớn 大, để tóc đuôi Sam 彡 là 1 kẻ Tham lam","SAN","mai(ru)",0],["伺","TỨ","thăm, hỏi thăm","伺 一 亻bằng 伺 何 Dò xét ý TỨ một người cách hỏi cái gì","SHI","ukaga(u)",0],["申","THÂN","thân thỉnh (xin)","1 thân ngoài đồng","SHIN","moo(su)",0],["丸","HOÀN","tròn","số 9 thêm một gạch thành số 10 tròn trịa","GAN","maru, maru(i), maru(meru)",0],["才","TÀI","tài năng","NHẤT 一 QUYẾT 亅 trở thành TÀI 才 PHIỆT 丿","SAI","",0],["戸","HỘ","hộ khẩu","Một 一 con Ma 尸 đang gõ Cửa 戸 nhà tôi.","KO","to",0],["欠","KHIẾM","khiếm khuyết","một người khuyết tật phải nhờ người khác cõng trên vai","KETSU","ka(keru), ka (ku)",0],["王","VƯƠNG","vương giả","một (NHẤT) mảnh đất (THỔ) chỉ có một vua (VƯƠNG)","OO","",0],["化","HÓA","biến hóa","người cười hihi hóa vui vẻ","KA, KE","ba(keru), ba (kasu)",0],["反","PHẢN","phản loạn, phản đối","LẠI (又) bị PHẢN (反) dame nên vô VÁCH ĐÁ (厂) núp.","HAN, HON, TAN","so(ru), so (rasu)",0],["比","TỈ","so sánh, tỉ lệ, tỉ dụ","Cứ mở Miệng ra lại lấy ví DỤ Nhà con Nguyệt SO SÁNH này nọ","HI","kura(beru)",0],["夫","PHU","trượng phu, phu phụ","Nhất 一 đại 大 trượng phu 夫","FU, FUU","otto",0],["仏","PHẬT","phật giáo","Người cứ ngồi KHƯ KHƯ cạnh gốc bồ đề là PHẬT","BUTSU","hotoke",0],["未","VỊ","vị thành niên, vị lai","1 cái cây quả của nó có VỊ gì","MI","",0],["布","BỐ","vải, tuyên bố","Cái khăn vải của BỐ nhớ treo nên phải","FU","nuno",0],["末","MẠT","kết thúc, mạt vận, mạt kì","cái CÂY lúc CUỐI đời thì héo rũ","MATSU, BATSU","sue",0],["平","BÌNH","hòa bình, bình đẳng, trung bình, bình thường","thêm 2 chủ ở vùng khô khan sẽ có hoà BÌNH","HEI, BYOO","tai(ra), hira",0],["氷","BĂNG","băng tuyết","Thêm 1 giọt bên trái Nước sẽ đóng thành BĂNG","HYOO","koori, hi",0],["犯","PHẠM","phạm nhân","Con CHÓ mà phạm pháp thì cũng bị CUỐN vào nồi","HAN","oka(su)",0],["他","THA","khác, tha hương, vị tha","Kẻ Dã 也 nhân 亻không phải là tôi, là thằng khác mà ông vừa Tha 他 cho nó rồi đấy!","TA","",0],["加","GIA","tăng gia, gia giảm","Muốn tham GIA thì phải có sức LỰC và lời nói","KA","kuwa(eru), kuwa(waru)",0],["可","KHẢ","có thể, khả năng, khả dĩ","khả năng đóng đinh vào miệng","KA","",0],["央","ƯƠNG","trung ương","Trung Ương(央) ở biên giới (Khuynh :冂 ) là to (Đại: 大 ) lớn nhất.","OO","",0],["刊","SAN","tuần san, chuyên san","Cái gì khô khan thì dùng dao cắt bỏ để làm lại","KAN","",0],["旧","CỰU","cũ, cựu thủ tướng, cựu binh","MỘT NGÀY trôi qua đã gọi là CỰU rồi (là quá khứ, là đã qua), ngày mai là tương lai","KYUU","",0],["札","TRÁT","tiền giấy","cái cây được đục thành cái tráp trong dịp Lễ","SATSU","fuda",0],["史","SỬ","lịch sử, sử sách","Lịch sử của người trung","SHI","",0],["失","THẤT","thất nghiệp, thất bại","ông chồng để vợ cắm sừng là thất bại","SHITSU","ushina(u)",0],["示","THỊ","biểu thị","2 二 chú tiểu 小 bày tỏ quan điểm về kỳ thi","JI, SHI","shime(su)",0],["礼","LỄ","lễ nghi, lễ nghĩa","Quỳ trước Bàn thờ để hành LỄ","REI, RAI","",0],["令","LỆNH","mệnh lệnh, pháp lệnh","tôi đc lệnh bắn 1 con ma dưới mái nhà","REI","",0],["列","LIỆT","cột, la liệt","Rút gươm ra để liệt kê vị trí xếp hàng","RETSU","",0],["州","CHÂU","tỉnh, bang, châu lục","Những dòng SÔNG ở các CHÂU lục đều có nhiều CÁT","SHUU","su",0],["守","THỦ","cố thủ, bảo thủ","Cảm giác cố thủ trong nhà rất thốn","SHU, SU","mamo(ru), mo (ri)",0],["在","TẠI","tồn tại, thực tại","hiện Tại ở nhà tranh vách đất","ZAI","a(ru)",0],["再","TÁI","lại, tái phát","(工円) Tái Tạo lại Công Viên","SAI, SA","futata(bi)",0],["件","KIỆN","điều kiện, sự kiện, bưu kiện","Người dùng trâu để chở kiện hàng","KEN","",0],["共","CỘNG","tổng cộng, cộng sản, công cộng","Hai cộng hai cộng tám bằng bao nhiêu","KYOO","tomo",0],["各","CÁC","các, mỗi","CÁC vị Mồm to Lại đến Sau","KAKU","onoono",0],["印","ẤN","in ấn, ấn tượng","chữ E và chữ P đọc là ép nghĩa là ấn xuống","IN","shirushi",0],["因","NHÂN","nguyên nhân","Nguyên nhân (因) bị đánh là do to (大) mồm (口)","IN","yo(ru)",0],["団","ĐOÀN","đoàn kết, đoàn đội","đoàn thể là 1 cái miệng lớn luôn nói những lời lẽ rất thốn","DAN, TON","",0],["仲","TRỌNG","trọng tài","Người 亻đứng giữa中 là người quan trọng","CHUU","naka",0],["兆","TRIỆU","triệu chứng, triệu triệu (10 mũ 12)","TRIỆU NGƯỜI ĐI tứ hướng","CHOO","kiza(su), kiza (shi)",0],["当","ĐƯƠNG","chính đáng; đương thời, tương đương","đầu nhím Đương nhiên có 3 lông rồi","TOO","a(taru), a(teru)",0],["成","THÀNH","thành tựu, hoàn thành, trở thành","có vượt QUA được muôn VẠN khó khăn thì mới THÀNH công được","SEI, JOO","na(ru), na(su)",0],["争","TRANH","đấu tranh, chiến tranh, tranh luận, cạnh tranh","cầm cái đinh 3 xiên qua đầu con cá","SOO","araso(u)",0],["任","NHIỆM","trách nhiệm, nhiệm vụ","Người làm vua phải có trách nhiệm","NIN","maka(seru), maka(su)",0],["利","LỢI","lợi nhuận, phúc lợi, lợi ích","Cắt lúa( hoà) bằng Đao thì rất tiện Lợi!","RI","ki(ku)",0],["余","DƯ","thặng dư, dư dật","1 cái nón 2 đứa bé đội thì bị dư 1 đứa","YO","ama(ru), ama (su)",0],["防","PHÒNG","phòng vệ, phòng bị, đề phòng","Chị PHƯƠNG phải dựa mình vào tường để PHÒNG thủ","BOO","fuse(gu)",0],["判","PHÁN","phán quyết, phán đoán","Dùng dao cắt đôi tờ phán quyết","HAN, BAN","",0],["折","CHIẾT","bẻ gãy, chiết suất","mấy bác tiều phu. Tay (扌) cầm Rìu (斤)> để chặt Gãy cây (折 Chiết)","SETSU","o(ru), ori, o (reru)",0],["努","NỖ","nỗ lực","Tay muốn có được phũ nữ thì phải nỗ lực","DO","tsuto(meru)",0],["対","ĐỐI","đối diện, phản đối, đối với","đối đáp bằng văn文 quả là thốn寸","TAI, TSUI","",0],["束","THÚC","bó (hoa)","NÓI CHUYỆN (khẩu) với CÂY hàng ngày sẽ THÚC đẩy cây mau lớn.","SOKU","taba",0],["位","VỊ","vị trí, tước vị, đơn vị","thời dịch này thì Người イ nào Đứng 立 yên ở Vị trí đó.","I","kurai",0],["囲","VI","chu vi, bao vây","Tính chu VI cái GIẾNG","I","kako(mu), kako(u)",0],["完","HOÀN","hoàn thành, hoàn toàn","Nhà mình (宀) có thêm 2 (二) đứa Trẻ nữa (儿 NHI)==> thì thật HOÀN hảo (完","KAN","",0],["快","KHOÁI","khoái lạc","Quyết(決) nước(水) Tâm(心) Nếu em Khoái ai thì cứ bỏ theo mà làm!","KAI","kokoroyo(i)",0],["改","CẢI","cải cách, cải chính","Tự Đánh bản thân để CẢI tạo tốt hơn","KAI","arata(meru), arata(maru)",0],["技","KĨ","kĩ thuật, kĩ nghệ","Dùng TAY(手） làm lại (又) 10(十) lần sẽ thành KỸ(技) năng.","GI","waza",0],["局","CỤC","cục diện, cục kế hoạch","CÂU CÚ đọc cho NGƯỜI CHẾT phải có bố CỤC rõ ràng","KYOKU","",0],["均","QUÂN","quân bình, quân nhất","Để cho bình quân mỗi nhà hai bao đất","KIN","",0],["芸","NGHỆ","nghệ thuật, nghệ nhân","Đám mây bay dưới cỏ chính là NGHỆ thuật","GEI","",0],["希","HI","hi hữu, hi vọng","Hi hữu mới có tấm vải to buộc chéo đc","KI","",0],["告","CÁO","báo cáo, thông cáo","báo cáo ! bò mất chân rồi","KOKU","tsu(geru)",0],["材","TÀI","tài liệu","CÂY 木 Ô 才","ZAI","",0],["坂","PHẢN","cái dốc","Đất phản ngược lại làm thành dốc","HAN","saka",0],["似","TỰ","tương tự","con người vốn Dĩ以 là tương Tự nhau","JI","ni(ru)",0],["児","NHI","nhi đồng, hài nhi","Mới biết đi 1 ngày thì là trẻ em","JI, NI","",0],["状","TRẠNG","tình trạng, trạng thái, cáo trạng","Trạng thaia: chó đái bờ tường","JOO","",0],["助","TRỢ","hộ trợ, trợ giúp, viện trợ, cứu trợ","1 mắt nên cần lực giúp đỡ","JO","tasu(keru), tasu(karu), suke",0],["労","LAO","lao động, lao lực, công lao","Lao động cần nhiều sức lực,chiếc khăn thấm ướt mồ hôi","ROO","",0],["例","LỆ","ví dụ, tiền lệ, thông lệ, điều lệ","(例) (亻) (歹) (刂) từng có tiền LỆ có người đã chết NGẠT khi nhìn thấy ĐAO phủ","REI","tato(eru)",0],["和","HÒA","hòa bình, tổng hòa, điều hòa","Khi nào có lúa bỏ vào miệng thì lúc ấy đã hoà bình","WA, O","yawa(ragu), yawa(rageru), nago(mu), nago(yaka)",0],["述","THUẬT","tường thuật. tự thuật","Thuật lại đường đi ra hồ","JUTSU","no(beru)",0],["承","THỪA","thừa nhận","THỪA kế đc ba cây LIỄU giữa dòng nước","SHOO","uketamawa(ru)",0],["招","CHIÊU","chiêu đãi","Tay cầm đao mồm hô hào chiêu mộ khách hàng","SHOO","mane(ku)",0],["実","THỰC","sự thực, chân thực","Thực sự dưới mái nhà có 3 người ( vợ , chồng và ông hàng xóm )","JITSU","mi, mino(ru)",0],["周","CHU","chu vi, chu biên","MỘ土 hố口 Tính CHU vi toàn bộ khu nghĩa trang có và các chôn","SHUU","mawa(ri)",0],["妻","THÊ","thê tử","tán mười(十) em (ヨ) gái(女)may ra mới lấy được 1 thê","SAI","tsuma",0],["刷","LOÁT","ấn loát","ĐAO LOÁT hình cái KHĂN lên thây ma(THI)","SATSU","su(ru)",0],["効","HIỆU","hiệu quả, hiệu ứng, công hiệu","GIAO cấu mà dùng LỰC sẽ có HIỆU QUẢ...","KOO","ki(ku)",0],["幸","HẠNH","hạnh phúc, hạnh vận","Có Đất ( 土 ）có Tiền ( ¥ ) thì Hạnh phúc","KOO","saiwa(i), sachi, shiawa(se)",0],["固","CỐ","ngoan cố, cố thủ","Đồ CỔ được bọc kiên CỐ","KO","kata(meru), kata(maru), kata(i)",0],["季","QUÝ","mùa","cây LÚA CON chỉ sống được 1 QUÝ thôi...","KI","",0],["岩","NHAM","đá tảng, nham thạch","Đá ở dưới núi là dung nham hoá thạch","GAN","iwa",0],["協","HIỆP","hiệp lực, hợp tác","HIỆP hội THẬP TAM LỰC","KYOO","",0],["居","CƯ","cư trú","Con ma cư trú trong nhà cổ","KYO","i(ru)",0],["果","QUẢ","hoa quả, thành quả, kết quả","cánh đồng trồng cây ăn quả","KA","ha(tasu), ha (teru), ha(te)",0],["官","QUAN","quan lại","ông QUAN trong nhà MIỆNG thì to bụng bự","KAN","",0],["委","ỦY","ủy viên, ủy ban, ủy thác","NỮ(女) THÁC(委) LÚA(禾). PHỤ thường được UỶ việc cấy","I","",0],["易","DỊCH","dễ, dịch chuyển","mỗi NGÀY các con VẬT phải DỊCH chuyển để kiếm thức ăn.","I, EKI","yasa(shii)",0],["底","ĐỂ","đáy","Để tờ giấy dưới đáy ngôi nhà","TEI","soko",0],["的","ĐÍCH","mục đích, đích thực","Mục ĐÍCH cho BẠCH thí CHỦ vào trong BAO","TEKI","mato",0],["制","CHẾ","chế ngự, thể chế, chế độ","Cầm dao khống chế 制 con bò 牛 nằm yên trên cái cân","SEI","",0],["波","BA","sóng, phong ba","SÓNG vỗ BA giọt nước dính trên DA.","HA","nami",0],["板","BẢNG","tấm bảng","Phản đối việc chặt cây làm bảng","HAN, BAN","ita",0],["版","BẢN","xuất bản","xuất BẢN cuốn sách về bọn Phiến quân Phản động","HAN","",0],["武","VŨ","vũ trang, vũ lực","muốn cướp lấy VŨ khí của DẶC (giặc) thì CHỈ có MỘT cách","BU, MU","",0],["表","BIỂU","biểu hiện, bảng biểu, biểu diễn","Y phục biểu hiện ai là chủ","HYOO","omote, arawa (su), arawa (reru)",0],["命","MỆNH","tính mạng, cách mạng, vận mệnh, mệnh lệnh","dưới mái nhà có 1 lời nói mệnh lệnh mạnh như đao kiếm","MEI, MYOO","inochi",0],["油","DU","dầu","Dầu nổi tự do ngao du trên nước","YU","abura",0],["勇","DŨNG","dũng cảm","Đàn Ông DŨNG cảm không sợ Ma","YUU","isa(mu)",0],["迷","MÊ","mê hoặc, mê đắm","đi thấy GẠO là MÊ","MEI","mayo(u)",0],["美","MĨ","mĩ nhân, mĩ lệ","Con dê to thì đẹp mĩ miều","BI","utsuku(shii)",0],["独","ĐỘC","cô độc, đơn độc","Độc thân thì k dùng 3 con sâu","DOKU","hito(ri)",0],["則","TẮC","quy tắc, phép tắc","Tiền BỐI cầm ĐAO đi thiết lập QUI TẮC.","SOKU","",0],["相","TƯƠNG","tương hỗ, tương tự, tương đương; thủ tướng","MỤC và MỘC đọc TƯƠNG tự nhau","SOO, SHOO","ai",0],["草","THẢO","thảo mộc","Cỏ mọc sớm & nhanh là cỏ THẢO nguyên","SOO","kusa",0],["信","TÍN","uy tín, tín thác, thư tín","Con Người Nói phải giữ chữ Tín.","SHIN","",0],["追","TRUY","truy lùng, truy nã, truy cầu","Tên quan tham ô đang chạy trên đường ... hãy đuổi theo","TSUI","o(u)",0],["単","ĐƠN","cô đơn, đơn độc, đơn chiếc","3 cái cây trên đồng quá đơn giản, 1h ra làm cũng dc","TAN","",0],["炭","THAN","than","Tàn tro dưới núi là than","TAN","sumi",0],["退","THOÁI","triệt thoái, thoái lui","dẫn quân không tốt nên thoái lui","TAI","shirizo(ku), shirizo(keru)",0],["栄","VINH","vinh quang, vinh hạnh","CÂY được đội vương miệng nên cảm thấy rất VINH dự","EI","saka(eru), ha (e), ha(eru)",0],["科","KHOA","khoa học, chuyên khoa","dùng cái ĐẤU đựng LÚa thật là KHOA học","KA","",0],["胃","VỊ","dạ dày","Chị Nguyệt lo làm ruộng quên cả ăn nên bị đau Dạ Dày","I","",0],["級","CẤP","sơ cấp, trung cấp, cao cấp","Người có cấp bậc sẽ buộc 3 cái dây","KYUU","",0],["軍","QUÂN","quân đội, quân sự","Xe có phủ bên trên là xe quân đội","GUN","",0],["係","HỆ","quan hệ, hệ số","Sợi dây (chỉ) nối người với người là mối quan HỆ","KEI","kaka(ru), kakari",0],["型","HÌNH","khuôn hình, mô hình","Khuôn hình làm từ đất","KEI","kata",0],["客","KHÁCH","hành khách, thực khách","Người ở dưới MÁI NHÀ đang TRUY hỏi bằng MIỆNG chính là KHÁCH","KYAKU, KAKU","",0],["逆","NGHỊCH","phản nghịch","Tưởng tượng tí, có phải giống người cắm đầu xuống chổng hai chân lên trời chạy k. Vậy thì trái với tự nhiên nên NGHỊCH là đúng rồi","GYAKU","saka, saka (rau)",0],["限","HẠN","giới hạn, hữu hạn, hạn độ","Lương thực bị Giới hạn bới bức tường","GEN","kagi(ru)",0],["指","CHỈ","chỉ định, chỉ số","TAY cầm THÌA CHỈ trỏ cả NGÀY","SHI","yubi, sa(su)",0],["昨","TẠC","qua, hôm qua, năm qua","hôm qua ÉP(F) em nó làm cả ngày quá nên nó dỗi mãi","SAKU","",0],["査","TRA","điều tra","kiểm tra cái cây trồng trong chậu","SA","",0],["省","TỈNH","tỉnh lược, phản tỉnh, hồi tỉnh","THIẾU tiền thì MẮT lúc nào cũng TỈNH , ngủ k nổi","SEI, SHOO","kaeri(miru), habu(ku)",0],["師","SƯ","giáo sư, tôn sư trọng đạo","Quan lại ở thành thị thường là giáo sư","SHI","",0],["財","TÀI","tiền tài, tài sản","kẻ thiên tài thì tiền của không thiếu","ZAI, SAI","",0],["殺","SÁT","sát hại, sát nhân","メ) 殺) 殳) (木 Dùng thuốc mê ( sát ( hại kẻ thù ( rồi treo lên cây","SATSU, SAI, SETSU","koro(su)",0],["差","SAI","sai khác, sai biệt","Con Dê làm việc sai trái","SA","sa(su)",0],["航","HÀNG","hàng không, hàng hải","Người đội mũ đi thuyền hàng","KOO","",0],["根","CĂN","gốc, căn bản, căn cứ","bền(艮 Cây ) nhờ gốc rễ (căn)","KON","ne",0],["候","HẬU","mùa, khí hậu, thời hậu","イ ユ ） rủ người ( ) iu ( đi bắn tên fai phụ thuộc vào khí Hậu","KOO","sooroo",0],["庫","KHỐ","kho, xa khố, kim khố","XE trong nhà là đồ quốc KHỐ","KO, KU","",0],["訓","HUẤN","huấn luyện","Ngôn từ tuôn ra như sông là lời giáo huấn","KUN","",0],["害","HẠI","có hại, độc hại, lợi hại","Nhà ông chủ nuôi 3 miệng ăn hại","GAI","",0],["帯","ĐỚI","nhiệt đới, ôn đới","giữa vùng núi và thành phố có cái đai để ngăn cách","TAI","o(biru), obi",0],["庭","ĐÌNH","triều đình, gia đình","Sân đình có mái che nơi vuaa đi lại","TEI","niwa",0],["造","TẠO","chế tạo, sáng tạo","BÁO cáo đc chuyển ĐI để mọi người cùng chế tạo","ZOO","tsuku(ru)",0],["孫","TÔN","con cháu","đứa nào có quan hệ với con mình gọi là cháu","SON","mago",0],["能","NĂNG","năng lực, tài năng","Mự nguyệt có khả năng cười hihi","NOO","",0],["破","PHÁ","phá hoại, tàn phá","Cầm đá phá rách da","HA","yabu(ru), yabu (reru)",0],["浴","DỤC","tắm","Bạn gái DỤC đi TẮM ở tuyệt tình CỐC","YOKU","a(biru), a (biseru)",0],["容","DUNG","dung mạo, hình dung, nội dung, dung nhận","Bài thơ viết thung lũng dưới mái nhà có nội DUNG hay","YOO","",0],["流","LƯU","lưu lượng, hạ lưu, lưu hành","ĐẦU TƯ NƯỚC đổ ra SÔNG mới LƯU thông đc dòng chảy","RYUU, RU","naga(reru), naga(su)",0],["陸","LỤC","lục địa, lục quân","Lục đia là nơi chân đi bộ từ vùng đất này qua vùng đất khác mãi không hết","RIKU","",0],["率","SUẤT","thống suất, xác suất, tỉ lệ suất","Huyền玄 chảy nước gấp 1 lần. Đó chính là công suất","SOTSU, RITSU","hiki(iru)",0],["略","LƯỢC","tỉnh lược, xâm lược","CÁC vị đang suy tính chiến lược ngoài RUỘNG","RYAKU","",0],["望","VỌNG","ước vọng, nguyện vọng, kì vọng","Nguyện vọng của vua trước khi chết là nhìn thấy ánh trăng","BOO, MOO","nozo(mu)",0],["敗","BẠI","thất bại","BẠI trận mất tiền bị đánh","HAI","yabu(reru)",0],["副","PHÓ","phó, phó phòng","Có 1 mảnh ruộng thì nên giao phó đao phủ canh gác","FUKU","",0],["婦","PHỤ","phụ nữ, dâm phụ","Sau khi về nhà (帰) và vứt bỏ cây đao (リ)người con gái 女 trở thành PHỤ nữ 婦","FU","",0],["組","TỔ","tổ hợp, tổ chức","THẢ且 sợi TƠ糸 vào TỔ kiến","SO","ku(mu), kumi",0],["責","TRÁCH","khiển trách, trách cứ, trách nhiệm","Làm Chủ phải có TRÁCH nhiệm với đồng Tiền","SEKI","se(meru)",0],["接","TIẾP","nối tiếp, tiếp đãi, tiếp xúc","cầm tay đứng tiếp giáp người con gái mình yêu","SETSU","tsu(gu)",0],["商","THƯƠNG","thương mại, thương số","THƯƠNG gia là người rất bận rộn vừa phải Đứng, Đi lại Xung Quanh vừa phải Nói.","SHOO","akina(u)",0],["設","THIẾT","thiết lập, kiến thiết","Nói chuyện với kẻ Thù để Thiết lập quan hệ","SETSU","moo(keru)",0],["清","THANH","thanh bạch, trong sạch","Nước xanh biếc thể hiện sự thanh khiết sạch sẽ","SEI, SHOO","kiyo(i), kiyo (maru), kiyo (meru)",0],["深","THÂM","thâm sâu, thâm hậu","Vứt cái CÂY xuống hang 穴 để đo độ sâu, thấy nước bắn lên","SHIN","fuka(i), fuka (maru), fuka (meru)",0],["得","ĐẮC","đắc lợi, cầu bất đắc","Bước chân đi 1 Tấc(thốn), Đắc ý thấy mặt trời","TOKU","e(ru), u(ru)",0],["第","ĐỆ","đệ nhất, đệ nhị","Em trai đội trúc là đệ","DAI","",0],["停","ĐÌNH","đình chỉ","em xinh em đứng (亻) đầu ĐÌNH (亭). bao xe phải Dừng (停車)","TEI","",0],["断","ĐOẠN","phán đoán, đoạn tuyệt","dùng Búa (斤) giã Gạo (米) => làm hạt gạo bị Đứt Gãy hết. (lẽ ra phải dùng chày)","DAN","ta(tsu), kotowa (ru)",0],["貨","HÓA","hàng hóa","Tiền hoá thành hàng","KA","",0],["液","DỊCH","dung dịch","Viết thương ban đêm 夜 tiết ra nước 水 gọi là nước dịch 液","EKI","",0],["移","DI","di chuyển, di động","Muốn LÚA(禾) được NHIỀU(多) hơn thì phải DI CHUYỂN(移) đến vùng khác để canh tác","I","utsu(ru), utsu (su)",0],["規","QUY","quy tắc, quy luật","Chồng là người nhìn ra quy tắc khuôn phép","KI","",0],["許","HỨA","cho phép, hứa khả","lời đã HỨA thì phải nhất NGÔN kí xuất tứ mã (NGỌ) nan truy","KYO","yuru(su)",0],["球","CẦU","quả cầu, địa cầu","ông Vua (王) Cầu nguyện (求) được sống lâu như quả địa Cầu (球)","KYUU","tama",0],["救","CỨU","cấp cứu, cứu trợ","Bị ĐÁNH nên phải CẦU CỨU","KYUU","suku(u)",0],["現","HIỆN","xuất hiện, hiện tại, hiện tượng, hiện hình","Ngày xưa thấy vua xuất hiện mọi người kéo nhau đi xem( giờ cũng vậy mà )","GEN","arawa(reru), arawa(su)",0],["混","HỖN","hỗn hợp, hỗn độn, hỗn loạn","Dươi ánh mặt trời tập trung hỗn loạn đông đúc chảy mồ hôi nhưng vẫn có tiếng cười ヒヒ","KON","ma(jiru), ma (zaru), ma (zeru)",0],["術","THUẬT","kĩ thuật, học thuật, nghệ thuật","Phép thuật làm mọc cây木 giữa đường行","JUTSU","",0],["章","CHƯƠNG","chương sách","Sáng Sớm Đứng nhận huân CHƯƠNG","SHOO","",0],["常","THƯỜNG","bình thường, thông thường","trẻ NHỎ đi HỌC THƯỜNG có khăn lau MIỆNG","JOO","tsune, toko",0],["情","TÌNH","tình cảm, tình thế","Con tim bật đèn xanh là có tình cảm","JOO, SEI","nasa(ke)",0],["植","THỰC","thực vật, thực dân","Trực tiếp trồng cây, tạo nên thảm THỰC vật","SHOKU","u(eru), u(waru)",0],["順","THUẬN","tòng thuận, thuận tự","Nước lúc nào cũng chẩy THUẬN chiều từ ĐẦU (thượng nguồn) dòng sông","JUN","",0],["象","TƯỢNG","hiện tượng, khí tượng, hình tượng","Đắp TƯỢNG hình đầu Muỗi thân Lợn","SHOO, ZOO","",0],["検","KIỂM","kiểm tra","Nhìn giống một người đứng đội nón, dạng hai chân ra để KIỂM tra xem CÂY mình trồng có tốt k","KEN","",0],["湖","HỒ","ao hồ","Thời cổ xưa thường ngắm trăng bên hồ nước","KO","mizuumi",0],["期","KÌ","thời kì, kì hạn","Cam ngọt đến thời Kì thu hoạch","KI, GO","",0],["喜","HỈ","vui","Đưa một lúc 1 hạt đậu vào miệng thấy rất hoan HỈ, vui sướng","KI","yoroko(bu)",0],["結","KẾT","đoàn kết, kết thúc","bồ KẾT ai lấy sợi chỉ buộc được mồm mấy thằng Sĩ lại","KETSU","musu(bu), yu (u), yu(waeru)",0],["給","CẤP","cung cấp, cấp phát","Tập hợp các Sợi Tơ lại để Cấp cho xí nghiệp dệt vải","KYUU","",0],["雲","VÂN","mây","mưa được truyền đi khắp nơi gọi là mây","UN","kumo",0],["営","DOANH","doanh nghiệp, kinh doanh, doanh trại","mấy ông doanh nghiệp làm kinh doanh thì đầu tô bụng to, tóc lơ thơ","EI","itona(mu)",0],["温","ÔN","ôn hòa, ôn tồn","Mặt trời làm ấm nước trong cái bát","ON","atata(ka), atata (kai), atata (maru), atata (meru)",0],["貯","TRỮ","tàng trữ, lưu trữ","tích TRỮ VỎ SÒ dưới MÁI NHÀ đầy ĐINH…","CHO","",0],["測","TRẮC","đo đạc","Cân đo nước phải theo quy tắc!","SOKU","haka(ru)",0],["童","ĐỒNG","nhi đồng","Bọn nhi ĐỒNG thường hay LÍ luận đòi sống độc LẬP","DOO","warabe",0],["等","ĐẲNG","bình đẳng, đẳng cấp","Ở Trúc lâm Tự mọi người đều bình Đẳng","TOO","hito(shii)",0],["程","TRÌNH","trình độ, lộ trình, công trình","TRÌNH độ nịnh VUA bằng MIỆNG của HÒA thân thì không ai sánh được","TEI","hodo",0],["絶","TUYỆT","đoạn tuyệt, tuyệt diệu","Màu sắc 色 của sợi 糸 này tuyệt đối 絶対 không thay đổi! ( bán hàng đang quảng cáo)","ZETSU","ta(eru), ta (yasu), ta(tsu)",0],["然","NHIÊN","quả nhiên, tất nhiên, thiên nhiên","Chú chó (犬) tất NHIÊN (然) luôn bên cạnh ta (タ) dù có cháy (灬) đi chăng nữa. Lưu ý chữ タ có thêm 1 nét nữa.","ZEN, NEN","",0],["富","PHÚ","giàu, phú hào, phú hộ, phong phú","Triệu PHÚ là người ngồi trong nhà thôi, miệng nói một lời là kẻ hầu chạy ra RUỘNG làm việc hết","FU, FUU","to(mu), tomi",0],["費","PHÍ","học phí, lộ phí, chi phí","PHÍ TIỀN mua CUNG Tên","HI","tsui(yasu), tsui (eru)",0],["悲","BI","sầu bi, bi quan","tâm mà đầy thị phi thì buồn","HI","kana(shii), kana(shimu)",0],["筆","BÚT","bút","Thời xưa bút làm bằng chổi lông : hình ảnh tay cầm bút viết lên đốt tre","HITSU","fude",0],["備","BỊ","trang bị, phòng bị, thiết bị","Một người chuẩn Bị cỏ dưới sườn núi để sử dụng","BI","sona(eru), sona(waru)",0],["満","MÃN","thỏa mãn, bất mãn, mãn nguyện","cây CỎ được tưới NƯỚC kỹ LƯỠNG nên rất MÃN nguyện","MAN","mi(chiru), mi (tasu)",0],["量","LƯỢNG","lực lượng, độ lượng, dung lượng, trọng lượng","Khối lượng làm việc 1 ngày ngoài ruộng đất","RYOO","haka(ru)",0],["税","THUẾ","thuế vụ","Hoà huynh làm bên thuế má","ZEI","",0],["路","LỘ","đường, không lộ, thủy lộ","quốc Lộ (路) in dấu Các (各) bước chân (足)","RO","ji",0],["豊","PHONG","phong phú","Bài hát về đậu rất là PHONG phú","HOO","yuta(ka)",0],["農","NÔNG","nông nghiệp, nông thôn, nông dân","Làm nông nghiệp nơi viết ra những ca khúc thần thánh","NOO","",0],["損","TỔN","tổn hại, tổn thương","Tự tay làm tổn thất nhân viên của mình. (Trong lúc ấy muốn tuyenr nhân viên thì tốn bao nhiêu công sức mồi chài)","SON","soko(nau), soko(neru)",0],["想","TƯỞNG","tư tưởng, tưởng tượng","Người mà MẮT và TIM hay treo ngược cành CÂY là người hay TƯỞNG tượng","SOO, SO","",0],["戦","CHIẾN","chiến tranh, chiến đấu","đơn giản単 là cầm cái qua戈 đâm vào nhau","SEN","ikusa, tataka (u)",0],["数","SỔ","số lượng","Người PHỤ NỮ là người phải ghi SỔ sách số GẠO trong nhà","SUU, SU","kazu, kazo (eru)",0],["鉄","THIẾT","sắt, thiết đạo, thiết giáp","luyện vàng thất bại thành sắt","TETSU","",0],["感","CẢM","cảm giác, cảm xúc, cảm tình","Nhất (一) Khẩu (口)Thành (成Tâm (心)","KAN","",0],["解","GIẢI","giải quyết, giải thể, giải thích","Dùng đao dồn bò vào góc để giải quyết","KAI, GE","to(ku), to (kasu), to(keru)",0],["愛","ÁI","yêu, ái tình, ái mộ","Bàn Tay dùng Khăn sưởi ấm Trái Tim từ phía sau.(chảo mịch tâm truy)","AI","",0],["極","CỰC","cực lực, cùng cực, địa cực","1bàn tay nuôi 5 cái miệng với một cái cây thì thật khổ cực","KYOKU, GOKU","kiwa(meru), kiwa(maru), kiwa(mi)",0],["禁","CẤM","cấm đoán, nghiêm cấm","CẤM ai CHỈ RA (示す) khu RỪNG (林) này","KIN","",0],["罪","TỘI","tội phạm, tội ác","Mắc TỘI PHI nhân tính sẽ bị cho vào cái VÕNG rồi treo ngược lên","ZAI","tsumi",0],["資","TƯ","tư bản, đầu tư, tư cách","Có tiền rồi tiếp đến sẽ đầu TƯ","SHI","",0],["準","CHUẨN","tiêu chuẩn, chuẩn bị","Chuẩn bị cho 10 con chim uống nước","JUN","",0],["種","CHỦNG","chủng loại, chủng tộc","Gieo Lúa cần chọn CHỦNG loại có TRọng lượng cao","SHU","tane",0],["雑","TẠP","tạp chí, tạp kĩ","9 con chim đậu trên cây nhìn rất là hỗn TẠP, như một đống tạp nham vì không cùng loại","ZATSU, ZOO","",0],["算","TOÁN","tính toán, kế toán, toán học","Chắp tay đưa mắt nhìn lên hai cây trúc để làm TOÁN","SAN","",0],["察","SÁT","quan sát, giám sát, cảnh sát","2 chú TIỂU 小 bắt TRĂNG 月 về nhà 亠 , chưa về tới đã bị cảnh sát bắt","SATSU","",0],["構","CẤU","cấu tạo, cấu thành, cơ cấu","Dùng Gỗ 木 để Tái 再 CẤU tạo cái Giếng 井","KOO","kama(eru), kama(u)",0],["関","QUAN","hải quan, quan hệ","Hai người lính canh cửa Thiên Môn tránh khỏi những việc không liên QUAN.","KAN","seki",0],["境","CẢNH","nhập cảnh, quá cảnh, cảnh ngộ","Đứng trên vùng đất ranh giới để ngắm CẢNH","KYOO, KEI","sakai",0],["漁","NGƯ","đánh cá","Tát nước để bắt cá","GYO, RYOO","",0],["演","DIỄN","diễn viên, biểu diễn, diễn giả","DIỄN múa rối nước thì đứng trong MÁI HIÊN, thò hai chân xuống nước rồi TỰ DO múa máy cái gậy điều khiển con rối","EN","",0],["管","QUẢN","ống, mao quản, quản lí","(管理) Các QUAN lại thường lấy bút TRE để ghi chép công việc trong cung cho dễ QUẢN lí","KAN","kuda",0],["銅","ĐỒNG","chất đồng","Đồng và vàng giống nhau đều là kim loại","DOO","",0],["適","THÍCH","thích hợp","Thích đứng và đi xung quanh cái bình Cổ quen thuộc.","TEKI","",0],["精","TINH","tinh lực, tinh túy","gạo là tinh hoa mà trời xanh ban cho ta.","SEI, SHOO","",0],["像","TƯỢNG","tưởng tượng, thần tượng","Người đúc tượng con voi","ZOO","",0],["総","TỔNG","tổng số, tổng cộng","Sợi chỉ công tâm, là sợi chỉ tổng hợp","SOO","",0],["鼻","TỊ","mũi","Tự mình ra cánh đồng chắp tay lên mũi chẳng biết để làm gì","BI","hana",0],["複","PHỨC","phức tạp","Y phục của người nằm đến ngày hôm sau thật là PHỨC tạp","FUKU","",0],["鳴","MINH","hót","Chim KÊU RÉO như đang thanh MINH điều gì","MEI","na(ku), na(ru), na(rasu)",0],["綿","MIÊN","lụa","Miếng vải có sợi chỉ trắng dài MIÊN man.","MEN","wata",0],["領","LĨNH","thống lĩnh, lãnh thổ, lĩnh vực","Người đứng ĐẦU 頁 được ra LỆNH令 nên gọi là thống LĨNH","RYOO","",0],["歴","LỊCH","lí lịch, lịch sử, kinh lịch","DỪNG lại bên khu RỪNG cạnh SƯỜN NÚI để nghĩ về LỊCH sử của nó","REKI","",0],["輪","LUÂN","bánh xe, luân hồi","Dùng bánh xe luân chuyển sách trong nhà","RIN","wa",0],["編","BIÊN","đan, biên tập","dùng chỉ đan thành quyển sách để dưới cửa","HEN","a(mu)",0],["線","TUYẾN","dây, tiền tuyến, điện tuyến, vô tuyến","糸màu 白ở nước水giống sợi chỉ trắng dưới kim Tuyến","SEN","",0],["導","ĐẠO","dẫn đường, chỉ đạo","chỉ đường đắc ĐẠO thật là thốn","DOO","michibi(ku)",0],["談","ĐÀM","hội đàm, đàm thoại","đàm phán nói chuyện nảy lửa","DAN","",0],["確","XÁC","chính xác, xác lập, xác suất","XÁC con CHIM nằm trên tảng ĐÁ","KAKU","tashi(ka), tashi (kameru)",0],["器","KHÍ","khí cụ, cơ khí, dung khí","KHÍ cụ này To bằng 4 cái Miệng","KI","utsuwa",0],["賛","TÁN","tán đồng, tán thành","2 ông chồng ( 夫,) tán thành dùng chung con sò lông (貝)","SAN","",0],["賞","THƯỞNG","giải thưởng, tưởng thưởng","Nhân viên được đội vương niệm trên đầu lên nhận thưởng","SHOO","",0],["積","TÍCH","tích tụ, súc tích, tích phân","Ông chủ tích lúa để mua bảo bối","SEKI","tsu(mu), tsu (moru)",0],["録","LỤC","kí lục, đăng lục","sau kỉ LỤC của anh ta thì tiền 金 yô (ヨ）như nước 水","ROKU","",0],["績","TÍCH","thành tích","Thành tích của ông chủ là kiếm tiền từ buôn tơ lụa","SEKI","",0],["講","GIẢNG","giảng đường, giảng bài","Nói chuyện giảng giải cho 2 ô chủ việc tái sdung tiền yên","KOO","",0],["職","CHỨC","chức vụ, từ chức","Dùng tai lắng nghe âm thanh của vũ khí va chạm vào nhau là CHỨC vụ của người lính","SHOKU","",0],["観","QUAN","quan sát, tham quan","Dùng MẮT QUAN sát vẻ ngoài của con CHIM đang nằm","KAN","",0],["額","NGẠCH","trán, giá tiền, hạn ngạch, kim ngạch","Đếm số ĐẦU頁 KHÁCH客 để tính hạn NGẠCH suất cơm nấu hôm nay","GAKU","hitai",0],["類","LOẠI","chủng loại","ĐẦU hạt GẠO mà TO là LOẠI gạo tốt","RUI","",0],["願","NGUYỆN","tự nguyện, tình nguyện","Tờ Giấy (頁 HIỆT) ghi các NGUYÊN liệu (原) nấu ăn.==> NHỜ thằng con, hoặc ông chồng đi mua, お願いします.","GAN","nega(u)",0],["識","THỨC","nhận thức, kiến thức, tri thức","Người có học THỨC là người chỉ cần Nghe NÓI QUA là hiểu","SHIKI","",0],["競","CẠNH","cạnh tranh","Hai người Anh Trai, Đứng xem ai cao hơn","KYOO, KEI","kiso(u), se(ru)",0],["滴","TÍCH, TRÍCH","giọt nước, nhỏ giọt","GIỌT NƯỚC đc TÍCH trong cái bình CỔ có nắp","TEKI","shizuku, shitata(ru)",0],["曇","ĐÀM","có mây","Đàm là Đám mây che cả mặt trời","DON","kumo(ru)",0],["挟","HIỆP, TIỆP","kẹp","HAI TAY cầm HOẢ là đại HIỆP","KYOO","hasa(mu), hasa(maru)",0],["畜","SÚC, HÚC","súc vật","Những đốm đen ngoài đồng là xúc vật","CHIKU","",0],["燥","TÁO","can táo","3 quả TÁO trên cây bị cháy khô","SOO","",0],["肯","KHẲNG, KHẢI","khẳng định","KHẲNG định Chỉ có Trăng đứng yên","KOO","",0],["憎","TĂNG","ghét","Con tim dựng đứng lên căm ghét vì làm việc tăng ca 1 ngày vất vả ngoài đồng(mà không được ăn thịt để có sức lực- niku rasi)","ZOO","niku(mu), niku (i), niku(rashii), niku(shimi)",0],["枯","KHÔ","khô khát","CÂY CŨ thì sẽ bị khô héo","KO","ka(reru), ka (rasu)",0],["菓","QUẢ","hoa quả","Quả mà có cỏ thì để làm bánh kẹo","KA","",0],["塔","THÁP","tòa tháp","Tháp thời xưa dựng lên bằng cách trộn cỏ hoa với đất 1 cách hợp lý","TOO","",0],["膚","PHU","da","Ở trong nhà 7 七 ngày ngắm ruộng ngắm trăng thì da dẻ trắng bóc ra","FU","",0],["畳","ĐIỆP","chiếu","Điệp ra đồng, lấy khăn che mắt lại nằm ngủ","JOO","tata(mu), tatami",0],["詞","TỪ","ca từ","Làm Quản Lí 司 khi phát Ngôn 言 phải thật Từ 詞 tốn trong từng ngôn từ 司","SHI","",0],["粒","LẠP","hạt","Đứng 立 nhặt các hạt 粉 gạo 米","RYUU","tsubu",0],["筒","ĐỒNG","cái ống","Cây tre có các ống đồng đều giống nhau","TOO","tsutsu",0],["姓","TÍNH","họ","Con gái Sinh ra đã dược Tính theo Họ của cha","SEI, SHOO","",0],["麦","MẠCH","lúa mạch","một (Nhất) bông LÚA MẠCH ở trên đất (THỔ) hạt nặng trũi ngả về phía sau (TRUY)","BAKU","mugi",0],["灯","ĐĂNG","hải đăng","Ngày xưa dùng LỬA đốt cái ĐINH lên cho phát sáng để làm ĐÈN hải ĐĂNG","TOO","hi",0],["泥","NÊ, NỆ, NỄ","bùn","Nước làm ni cô bị ngã vào vũng bùn","DEI","doro",0],["鈍","ĐỘN","ngu độn","Vàng đeo lộn ngược đúng là đần độn, vì đần độn nên đeo vàng qua 7 ngọn núi rất gian truân","DON","nibu(i), nibu (ru)",0],["耕","CANH","canh tác","Cầy bừa, CANH tác xong thì đặt cái CẦY(lỗi) bên cạnh cái GIẾNG nghỉ ngơi","KOO","tagaya(su)",0],["肌","CƠ","da","Nguyệt nằm trên bàn khoe CƠ","","hada",0],["蒸","CHƯNG","chưng cất","Bọn nó đang HẤP bánh CHƯNG của con LIỄU trên bãi CỎ","JOO","mu(su), mu (reru), mu (rasu)",0],["脂","CHI","mỡ","Chị CHI khi trănglên hay mang thịt ba CHỈ ra rán lấy mỡ","SHI","abura",0],["隻","CHÍCH, CHỈ","Chiếc","1 chú chim chích đang đứng dạng chân","SEKI","",0],["缶","PHỮU, PHẪU, PHŨ","đồ hộp","Giờ ngọ lên núi nhặt lon","KAN","",0],["召","TRIỆU","triệu tập","Triệu tập không chỉ dùng mồm mà dùng cả đao kiếm","SHOO","me(su)",0],["瓶","BÌNH","cái bình","Khi Sơ khai bình làm bằng ngói","BIN","",0],["湿","THẤP, CHẬP","ẩm thấp","Mặt trời xuống THẤP quá nên nước bốc hơi lên ẩm thấp","SHITSU","shime(ru), shime(su)",0],["汗","HÃN, HÀN","mồ hôi","Khô khan thì phải ra mồ hôi","KAN","ase",0],["粉","PHẤN","bột","Phân nhỏ gạo ra sẽ nhỏ như bụi PHẤN","FUN","ko, kona",0],["祈","KÌ","cầu nguyện","Thật là KÌ khi mặc y phục mang cây rìu ra trước BÀN THỜ CẦU NGUYỆN","KI","ino(ru)",0],["棒","BỔNG","cái gậy","cầm gậy chọc vào háng 3 người đang trèo lên cây","BOO","",0],["叫","KHIẾU","kêu","Mồm kêu 4 tiếng","KYOO","sake(bu)",0],["毒","ĐỘC, ĐỐC","đầu độc","ông Chủ uống thuốc Độc Mỗi ngày","DOKU","",0],["軒","HIÊN","Mái hiên","Xe hơi được khô ráo là do có HIÊN che","KEN","noki",0],["塗","ĐỒ, TRÀ","sơn vẽ","Ngày xưa người ta thường đổ DƯ một chút NƯỚC vào ĐẤT cho nhão ra rồi đem chát, bôi vào đồ sứ để tạo mầu","TO","nu(ru)",0],["鋭","DUỆ, NHUỆ","tinh nhuệ","KIM cùng ANH TRAI có râu nhọn xem phim hậu DUỆ mặt trời…","EI","surudo(i)",0],["匹","THẤT","Xếp, con; Đôi; Đơn, lẻ","Thất mà như Tứ, bảo sao có “Thất ngôn Tứ tuyệt”","HITSU","hiki",0],["涙","LỆ","nước mắt","Xin HỘ chiếu ở ĐẠI sứ quán mà không được thì LỆ rơi","RUI","namida",0],["鉱","KHOÁNG","khai khoáng","Chỗ rộng có nhiều kim loại là nơi có khoáng sản","KOO","",0],["溶","DONG, DUNG","dung dịch","Tuyết tan ra thành nước chảy xuyên từ mái nhà xuống thung lũng","YOO","to(keru), to (kasu), to(ku)",0],["腰","YÊU","eo","Điểm trọng YẾU, đáng YÊU nhất của chị NGUYỆT chính là cái eo thon thon","YOO","koshi",0],["紅","HỒNG","hồng quân","Sợi dây công lý màu hồng hay đỏ","KOO, KU","beni, kurenai",0],["恋","LUYẾN","lưu luyến, luyến ái","Trên trái tim là lửa, trên lửa là cái nắp làm cho trái tim nóng bỏng, đó chính là tình yêu","REN","ko(u), koi, koi (shii)",0],["凍","ĐỐNG","đông lạnh","biển phía ĐÔNG rất LẠNH","TOO","koo(ru), kogo (eru)",0],["沈","TRẦM, THẨM, TRẤM","trầm mặc","Ngừoi buông tay khóc chân què chân thẳng trầm ngâm buồn bã","CHIN","shizu(mu), shizu(meru)",0],["軟","NHUYỄN","mềm, nhu nhuyễn","Xe Không có nên đi bộ cho nhuyễn chưn","NAN","yawa(raka), yawa(rakai)",0],["掘","QUẬT","khai quật","Dùng TAY khai QUẬT tử THI ròi MANG ĐI","KUTSU","ho(ru)",0],["掃","TẢO","quét","em gái tay cầm chổi quét thành phố","SOO","ha(ku)",0],["浅","THIỂN, TIÊN","thiển cận","Nước mà suy TÀN cạn kiệt thì dòng sông sẽ bị nông.","SEN","asa(i)",0],["黄","HOÀNG","hoàng kim","Cùng nhau mang tự do đến cho hoành đế (共、 由","KOO, OO","ki, ko",0],["幼","ẤU","ấu trĩ, thơ ấu","Lực(力) mà nhỏ (幺) thì là bọn trẻ con (幼 )- ấu","YOO","osana(i)",0],["零","LINH","số không","Dùng LỆNH bài cầu MƯA rơi mà mãi KHÔNG LINH","REI","",0],["肩","KIÊN","vai","ánh trăng 月 nói hộ 戸 lòng tôi , KIÊN trì gánh vác có ngày xệ vai","KEN","kata",0],["尊","TÔN","tôn trọng","Uống rượu bằng 2 ống hút cảm thấy thốn nhưng vẫn cố tỏ ra tôn nghiêm","SON","tatto(i), tooto (i), tatto(bu), tooto(bu)",0],["腕","OẢN, UYỂN","cánh tay","trăng lên đã khuya rồi, trong nhà tối như dạ nên em ngồi chống tay chờ","WAN","ude",0],["賢","HIỀN","hiền thần, hiền nhân","kẻ bề tôi(臣) lại(又) nhận được tiền(貝) thưởng vua ban cho chắc chắn là hiền thần(賢)","KEN","kashiko(i)",0],["砂","SA","cát","đá bị vỡ nhỏ","SA, SHA","suna",0],["胸","HUNG","ngực","chị Nguyệt Hung dữ, lồng NGỰC có 1 vết sẹo Bao quanh","KYOO","mune, muna",0],["封","PHONG","phong kiến","PHONG tỏa nên 2 miếng ĐẤT giờ chỉ còn lại 1 THỐN là dùng dc","FUU, HOO","",0],["宝","BẢO","bảo vật","Viên ngọc cất trong nhà là bảo bối","HOO","takara",0],["柱","TRỤ, TRÚ","trụ cột","cái cột trụ 柱 chủ 主 yếu làm từ thân cây 木","CHUU","hashira",0],["埋","MAI","chôn","MAI táng thì chẳng có LÍ gì mà không chôn xuống ĐẤT","MAI","u(meru), u (maru), u (moreru)",0],["硬","NGẠNH","cứng, ngang ngạnh","hòn ĐÁ đi nấu CANH thì nó vẫn cứng","KOO","kata(i)",0],["荒","HOANG","hoang dã, hoang dại","Cảnh hoang dã bên dòng sông cỏ cây chết cả","KOO","ara(i), a(reru), a(rasu)",0],["泉","TUYỀN, TOÀN","suối","Nước trắng là nước suối","SEN","izumi",0],["悩","NÃO","khổ não","suốt ngày để Tâm đến 3 cọng tóc trên đầu thật phiền Não ( còn khung vuông ở dưới là cái mặt nha)","NOO","naya(mu), naya(masu)",0],["敬","KÍNH","kính yêu","Bị đánh khẽ khi CẨU thả (苟) k dùng lối nói cung KÍNH với người lớn","KEI","uyama(u)",0],["翌","DỰC","Ngày mai, kỳ tới","Dạo DỰC chờ đến MAI Đứng xếp hàng mua 2 cái áo lông VŨ","YOKU","",0],["純","THUẦN, CHUẨN, ĐỒN, TRUY","đơn thuần, thuần khiết","Thuần hoá 7 ngọn núi bằng sợi dây","JUN","",0],["刺","THỨ, THÍCH","thích khách","Người bí ẩn (人) ẩn nấp trong Thành Phố (市) mang theo con ĐAO (刀) => kẻ đó là THÍCH (刺) khách","SHI","sa(su), sa (saru)",0],["双","SONG","song sinh","Hai thằng HỰU đứng gần nhau gọi là SONG HỰU","SOO","futa",0],["詰","CẬT","đóng hộp","a sĩ quan nói CẬT lực ( nên phát chán)","KITSU","tsu(meru), tsu (maru), tsu (mu)",0],["奥","ÁO, ÚC","trong cùng","BÊN TRONG cái ÁO là một hạt GẠO TO được chụp lên bằng cái hộp có tay cầm","OO","oku",0],["秒","MIỂU","giây (1/60 phút)","Thiếu gạo một giây mặt cũng miểu (mếu)","BYOO","",0],["群","QUẦN","quần chúng, quần thể","Anh QUÂN bắt cả đàn dê mặc QUẦN","GUN","mu(reru), mu (re), mura",0],["照","CHIẾU","tham chiếu","TRIỆU tập ánh sáng mặt trời CHIẾU thành ngọn LỬA","SHOO","te(ru), te(rasu), te(reru)",0],["臓","TẠNG","nội tạng","蔵 月 Nội Tạng được tàng trữ trong vòg 1 tháng","ZOO","",0],["簡","GIẢN","đơn giản","Không GIAN mà toàn làm bằng TRÚC TRE thì thật là đơn GIẢN","KAN","",0],["預","DỰ","gửi","Nhiều dự định dự trữ trong đầu","YO","azu(keru), azu (karu)",0],["雇","CỐ","thuê, cố nông","Thời xưa treo chim trước cửa nhà để ám chỉ thông báo tuyển người làm","KO","yato(u)",0],["紹","THIỆU","giới thiệu","(召) TRIỆU tập nhau lại, rồi mỗi người cầm một sợi DÂY giới thiệu về mình","SHOO","",0],["跡","TÍCH","dấu tích, vết tích","bước chân có dấu vết màu đỏ","SEKI","ato",0],["燃","NHIÊN","nhiên liệu","然 đốt火 đương nhiên nhiên liệu là dùng để rồi","NEN","mo(eru), mo (yasu), mo(su)",0],["巻","QUYỂN","quyển sách","ニ火 gặp lửa , con rắn 己 CUỘN vào","KAN","ma(ku), maki",0],["傾","KHUYNH","khuynh đảo, khuynh hướng","Người Đứng cầm Thìa gõ vào Đầu thì có Khuynh hướng bị Nghiêng!","KEI","katamu(ku), katamu(keru)",0],["郵","BƯU","bưu điện","cả Nghìn cây cỏ rủ xuống mặt Đất ở Bưu điện","YUU","",0],["籍","TỊCH, TẠ","quốc tịch, hộ tịch","Ngày xưa quốc tịch được ghi vào 3 cái cây tre","SEKI","",0],["依","Y, Ỷ","ỷ lại","ỷ lại cho vợ giặt y phục","I, E","",0],["巨","CỰ, HÁ","to lớn, cự đại, cự phách","Chữ C to + chữ U quay ngược vào thành cự không dấu","KYO","",0],["宇","VŨ","vũ trụ","Chữ VŨ gần giống chữ TỰ. Vũ trụ hán tự","U","",0],["誌","CHÍ","tạp chí","ý chí của kẻ SỸ ở trong TÂM, nhưng khi NÓI ra thì sẽ được ghi lại thành tạp CHÍ","SHI","",0],["著","TRỨ, TRƯỚC, TRỮ","trứ danh, trứ tác","Tác giả đội hoa trên đầu là Nguyễn Công TRỨ","CHO","arawa(su), ichijiru(shii)",0],["永","VĨNH","vĩnh viễn, vỉnh cửu","Vĩnh viễn chỉ có 1 giọt nước","EI","naga(i)",0],["池","TRÌ","cái ao","Cái VÙNG(地) mà ĐẤT(土) được đào đi để trữ NƯỚC( 氵) gọi là AO(池).","CHI","ike",0],["昇","THĂNG","thăng tiến, thăng thiên","Bắc thang lên hỏi ông trời, Lấy tiền cho gái có đòi được không","SHOO","nobo(ru)",0],["築","TRÚC","kiến trúc","trúc+công+hoàn+mộc=> kiến trúc thời xưa được làm hoàn toàn thủ công từ cây trúc!","CHIKU","kizu(ku)",0],["裏","LÍ","đằng sau","sáng sớm thầy LÝ đã lộn trái ÁO treo lên MÁI NHÀ","RI","ura",0],["募","MỘ","mộ tập, chiêu mộ","Chiêu mộ một lực lượng to lớn để dọn cỏ trong 1 ngày","BO","tsuno(ru)",0],["層","TẰNG","hạ tầng, thượng tầng","Leo lên nhà nhiều TẰNG có ngày đứt hơi chết thành tử THI","SOO","",0],["患","HOẠN","bệnh hoạn","串 心 2 ông Trung quốc có trái Tim Bệnh HOẠN","KAN","wazura(u)",0],["城","THÀNH","thành phố, thành quách","Lấy Đất đắp Thành lâu đài","JOO","shiro",0],["庁","SẢNH","đại sảnh","Cái sảnh ở trong nhà hình chữ T","CHOO","",0],["了","LIỄU","kết liễu, liễu giải","lá liễu mỏng manh","RYOO","",0],["齢","LINH","tuổi","Tuổi càng tăng răng càng ko nghe lệnh","REI","",0],["乱","LOẠN","phản loạn, chiến loạn","Lưỡi nói loạn lên","RAN","mida(reru), mida(su)",0],["延","DUYÊN","trì hoãn","Đang đi trên ĐƯỜNG mà phải DỪNG LẠI, TRÌ HOÃN không đi nữa","EN","no(biru), no (beru), no (basu)",0],["爆","BẠO, BẠC, BỘC","bộc phát","Dưới ánh mặt trờicoongj thêm tác động của lửa thì nước dưới lòng đất sẽ phát nổ","BAKU","",0],["伸","THÂN","dãn ra","thân người duỗi thẳng","SHIN","no(biru), no (basu)",0],["署","THỰ","biệt thự","Học Giả mà có con Mắt tốt thì sẽ mua đc biệt Thự, rồi ĐẶT tên cho nó cho có dấu ấn riêng","SHO","",0],["圧","ÁP","áp lực, trấn áp","Đất ở sườn núi dĩ nhiên là AP lực rồi","ATSU","",0],["億","ỨC","trăm triệu","Người có ý thức nhận ngay 100 triệu","OKU","",0],["占","CHIÊM, CHIẾM","chiếm cứ","Cây non mọc lên CHIẾM khoảng đất của cái chậu","SEN","shi(meru), urana(u)",0],["暴","BẠO, BỘC","bạo lực, bộc lộ","tàn bạo 暴 nhất là giữa ngày 日 đông lạnh giá. bắt trẻ con ngâm mình trong nước 水 lạnh.","BOO, BAKU","aba(ku), aba (reru)",0],["河","HÀ","sông, sơn hà","Sông là nơi nước có khả năng chảy qua","KA","kawa",0],["劇","KỊCH","kịch bản, vở kịch, kịch tính","Đang xem bói thấy trong nhà có 7 con lợn cầm đao diễn kịch","GEKI","",0],["諸","CHƯ","chư hầu","NHIỀU học GIẢ NÓI luyên thuyên vì cứ tuỏng mình là các vị CHƯ hầu, vua chúa.","SHO","",0],["装","TRANG","trang phục, hóa trang, trang bị","Tên sĩ quan mặc TRANG phục đứng dựa vào tường làm dáng","SOO, SHOO","yosoo(u)",0],["林","LÂM","lâm sản, lâm nghiệp","rừng thì có 2 cái cây 林","RIN","hayashi",0],["般","BÀN, BAN, BÁT","nhất ban","BÀN đi BÀN lại cuối cùng quyết định trung nhất là đóng THUYỀN bằng cái Thù (cái búa)","HAN","",0],["幅","PHÚC, BỨC","bề ngang","lấy cái CÂN để đo chiều rộng của 10 mảnh ruộng","FUKU","haba",0],["販","PHIẾN, PHÁN","bán, phán mại","mua bán 販売 là: lấy đồ trả tiền 貝, hoặc ngược lại 反 bán đồ lấy tiền 貝","HAN","",0],["介","GIỚI","ở giữa, môi giới, giới thiệu","Hai người đứng dưới mái nhà tự giới thiệu","KAI","",0],["森","SÂM","rừng","Vao rừng tìm 3 cây Sâm","SHIN","mori",0],["採","THẢI, THÁI","hái, thải dụng","Dùng tay hái lá trên cây","SAI","to(ru)",0],["療","LIỆU","trị liệu","Trị liệu chữa bệnh trong giường 1 ngày từ nhỏ đến to","RYOO","",0],["超","SIÊU","siêu việt, siêu thị, siêu nhân","chân TẨU MIỆNG ngậm DAO thật là SIÊU","CHOO","ko(eru), ko(su)",0],["捜","SƯU","sưu tầm, sưu tập","TAY chân TỰ DO đi LẠI tìm kiếm","SOO","saga(su)",0],["券","KHOÁN","vé, chứng khoán","chứng KHOÁN lao ĐAO (刀) vì 2 (二) vụ HOẢ (火) hoạn lớn","KEN","",0],["湾","LOAN","vịnh","vịnh đài Loan có dòng nước màu đỏ hình vòng Cung","WAN","",0],["兵","TIẾP","binh lính, binh lực","Binh lính đông chỉ thấy đao và chân","HEI, HYOO","",0],["針","CHÂM","cái kim, phương châm, châm cứu","10 cây kim châm","SHIN","hari",0],["況","HUỐNG","tình huống, trạng huống","Huynh gặp tình huống khó vã cả mồ hôi","KYOO","",0],["蔵","TÀNG","bảo tàng, tàng trữ, tàng hình","(艹) (厂) (蔵) (臣) (戈) cô giáo Thảo đang ở sườn núi tàng trữ gian thần rồi qua lại buôn bán với gian thần","ZOO","kura",0],["脳","NÃO","bộ não, đầu não","NÃO người thì có bộ NHỤC (thịt) và bộ NÃO. Phiền NÃO thì có bộ TÂM + NÃO","NOO","",0],["課","KHÓA","khóa học, chính khóa","KHOÁ học NÓI về các loại QUẢ cây","KA","",0],["被","BỊ, BÍ","bị, bị động, bị cáo","Người bị hại 被害 bị rách cả áo 衣 hở hết cả da 皮","HI","koomu(ru)",0],["担","ĐAM, ĐẢM","đảm đương, đảm bảo","Tự tay đảm đương 1 ngày","TAN","katsu(gu), nina (u)",0],["欧","ÂU, ẨU","châu âu","Châu Âu là KHU vực không thể THIẾU","OO","",0],["補","BỔ","bổ sung, bổ túc","Sử dụng hết mười bộ y phục thì phải bổ sung thêm!","HO","ogina(u)",0],["減","GIẢM","gia giảm, giảm","Cảm nhận mực nước đang Giảm đi","GEN","he(ru), he (rasu)",0],["府","PHỦ","chính phủ","Giao Phó ngôi Nhà cho Chính PHỦ","FU","",0],["県","HUYỆN","huyện, tỉnh","quan HUYỆN ngồi trên ghế NHỎ có 3 chân và chỉ dùng 1 con MẮT để phán xử.","KEN","",0],["区","KHU, ÂU","khu vực, địa khu","Khu vực đc đánh dấu x","KU","",0],["党","ĐẢNG","đảng phái","ông ANH HỌC cảm tình ĐẢNG","TOO","",0],["偏","THIÊN","thiên lệch","Người có thiên hướng bày sách ngoài cửa!","HEN","katayo(ru)",0],["裕","DỤ","dụ hoặc, Lắm áo nhiều đồ","Mặc đồ đẹp đi Dụ dỗ gái ở tuyệt tình cốc.","YUU","",0],["唖","Á","câm điếc","Cái miệng chỉ có thể phát ra âm á á không thể nói được. Ám chỉ là bị câm nhé.","","",0],["哀","AI","bi ai","Hình ảnh ai đội mũ mặc y phục rách rưởi mồm đi xin ăn nhìn bi thương lắm","AI","awa(re), awa (remu)",0],["握","ÁC","nắm","Chạy vào phòng ốc nắm chặt bàn tay để kìm nén mặt ác trong cong người. (đứng trước căn phòng ốc của mình năm chặt tay quyết tâm giữ gìn nó)","AKU","nigi(ru)",0],["扱","TRÁP","đối xử","3 người dùng tay bê tráp đối đáp trao duyên","","atsu(kau)",0],["或","HOẶC","nghi hoặc","Mồm chỉ nói Qua loa thì nội dung khá là nghi HOẶC","","",0],["案","ÁN","luận án, đề án","Dự ÁN 案 AN 安 toàn là trồng CÂY 木","AN","",0],["案","ÁN","luận án, đề án","thoát khỏi ÁN mạng nhờ đứng AN toàn trên CÂY","AN","",0],["偉","VĨ","vĩ đại","VĨ NHÂN nên sẽ khác (違） người thường","I","era(i)",0],["慰","ÚY","úy lạo, an úy","Ông trung úy尉 an ủi người dân bằng cả trái tim心.","I","nagusa(meru), nagusa(mu)",0],["尉","ÚY","cấp úy, đại úy","Đại uý thấy thốn thốn khi ra chỉ thị bắt ma","I","",0],["慰","ỦY","úy lạo, an úy","Thây ma hiển thị lên thì rất thốn nơi con tim","I","nagusa(meru), nagusa(mu)",0],["椅","Ỷ","ghế","Cây gỗ to khả dụng cho người lớn ngồi là cái ghế","","",0],["為","VI, VỊ","hành vi; vị kỉ","Đốt lửa dưới ruộng bậc thang là hành vi phá hoại","I","",0],["異","DỊ","dị bản, dị tộc, dị giáo","Tự nhiên đc CUNG cấp cho thửa RUỘNG thật là DỊ thường (khác thường)","I","koto",0],["維","DUY","sợi dây","Bạn Duy lấy chỉ buộc chim","I","",0],["萎","NUY","héo","Cây cỏ và lúa do coi gái tên nuy trồng đã héo khô","","",0],["萎","NUY","héo","bà THẢO đã ỦY quyền việc trồng LÚA cho đứa CON GÁI tên NUY . do không có khinh nghiệm đã làm cây lúa HÉO KHÔ ...","","",0],["遺","DI","sót lại, di tích, di ngôn, di vật","CHẠY một mạch đi lấy cái QUÝ giá để di truyền lại cho con cháu","I, YUI","",0],["溢","DẬT","tràn ra","1 cái ĐĨA đựng 818 loại thức ăn. nên NƯỚC tràn ra ngoài.","","",0],["逸","DẬT","ẩn dật","Miễn免 là ẩn DẬT thì chạy ĐƯỜNG nào cũng được","ITSU","",0],["稲","ĐẠO","cây lúa","lúa gặt một ngày có thể nhận đc gạo","TOO","ine, ina",0],["陰","ÂM","âm mưu, số âm","tường thành lúc này đang có mây làm âm u","IN","kage, kage(ru)",0],["隠","ẨN","ẩn giấu","BỐ sống nội TÂM nên ĐƯƠNG nhiên sẽ hướng về Ở ẨN","IN","kaku(su), kaku (reru)",0],["韻","VẬN","vần, âm vận","nhân viên đánh vần âm vận","IN","",0],["迂","VU","xa","Vi vu đường xa","","",0],["渦","QUA","dòng xoáy","NƯỚC chảy đến NHÀ CAO TẦNG thì bị chắn tạo thành vòng xoáy","KA","uzu",0],["浦","PHỔ","cửa biển","ven bờ biển Mỹ có tượng nữ thần tự do, sử DỤNG cây THẬP giá đứng trên mặt NƯỚC","HO","ura",0],["影","ẢNH","hình ảnh; nhiếp ảnh","Mặt trời mọc trên KINH ĐÔ bóng nắng chiếu ngang đẹp như một bức ẢNH.","EI","kage",0],["衛","VỆ","bảo vệ, vệ tinh, vệ sinh","韋 Khi đi vi hành cần có thị vệ","EI","",0],["益","ÍCH","lợi ích, hữu ích","Một chiếc đĩa có 8 lợi ÍCH","EKI, YAKU","",0],["益","ÍCH","lợi ích, hữu ích","dưới TƯỜNGnhà bác ÍCh (tường ngang) có 8 CÁI ĐĨA hữu ÍCH.","EKI, YAKU","",0],["越","VIỆT","vượt qua, việt vị","Chạy qua vách núi là tới nc Việt","ETSU","ko(su), ko(eru)",0],["閲","DUYỆT","kiểm duyệt","Giao cho huynh đứng trước cổng để kiểm duyệt","ETSU","",0],["援","THANH VIÊN","viện trợ","Tay đưa đồ viện trợ cho bằng hữu","EN","",0],["援","VIỆN","viện trợ","Bằng hữu (友) đưa tay (扌) và móng (爫) đến tiếp VIỆN (援)","EN","",0],["援","VIỆN","viện trợ","TAY đưa đồ VIỆN trợ cho bằng HỮU, mong bằng hữu NHẬN lấy","EN","",0],["炎","VIÊM","lửa lớn","lửa cháy lớn bị bỏng viêm loét khắp người","EN","honoo",0],["煙","YÊN","khói","Khói lửa bắt nguồn từ vùng đất phía tây","EN","kemu(ru), kemuri, kemu (i)",0],["艶","DIỄM","Độ bóng; sự nhẵn bóng, Sắc người đẹp, tươi sáng.","Màu sắc quả đậu đẹp khúc nào ra khúc nấy","","",0],["甥","SANH","cháu trai","sinh ra cháu trai","","",0],["往","VÃNG","vãng lai, dĩ vãng","Người chủ bước chân trái vào trong dĩ vãng","OO","",0],["応","ỨNG","đáp ứng, ứng đối, phản ứng","Con tim trong nhà lo lắng về sự đối ứng với bên ngoài","OO","",0],["臆","ỨC","ngực","Người RỤT RÈ hay để Ý意 về kí ỨC buồn","","",0],["恩","ÂN","ân huệ","Con tim có ân chưa trả thì chẳng khác gì đi tù (","ON","",0],["穏","ỔN","yên ổn","Trúng (当) mùa lúa (禾) là cái tâm (心) yên ổn (穏)","ON","oda(yaka)",0],["仮","GIẢ","giả thuyết, giả trang, giả dối","NGƯỜI làm PHẢN thì bị gọi là kẻ GIẢ nhân GIẢ nghĩa","KA, KE","kari",0],["価","GIÁ","giá cả, vô giá, giá trị","Người phương Tây rất coi trọng GIÁ trị","KA","atai",0],["寡","QUẢ","đơn lẻ, quả phụ","Quả phụ là người phân chia hàng trăm công việc trong nhà","KA","",0],["暇","HẠ","nhàn hạ","1 ngày đi Lại nhàn Hạ trên cầu thang","KA","hima",0],["暇","HẠ","nhàn hạ","(日) (尸二) (又 (匚 mặt trời mọc lên là 2 con cương Thi lại hựu) chui vào Tủ Phương) để (暇) trốn=> ở trong đó Nhàn rỗi chả biết làm gì","KA","hima",0],["架","GIÁ","cái giá","gia tăng thêm cây làm giá đỡ","KA","ka(keru), ka (karu)",0],["架","GIÁ","cái giá","tham GIA trồng CÂY để góp phần làm gia tăng GIÁ trị của cuộc sống.","KA","ka(keru), ka (karu)",0],["苛","HÀ","hà khắc","HÀ có Khả năng BẮT NẠT Thảo","","",0],["華","HOA","Trung Hoa","5 gạch ngang, 5 gạch sọc","KA, KE","hana",0],["我","NGÃ","bản ngã","QUA TAY là NGÃ( tay đỡ không được)","GA","ware, wa",0],["臥","NGỌA","nằm ngủ","Trong mỗi Người đều có sức mạnh Thần đang nằm ngủ NGOẠ","","",0],["雅","NHÃ","tao nhã","Người nhã nhặn thì không dùng răng cắn vào chim","GA","",0],["塊","KHỐI","đống","Bản chất ma quỷ chỉ là khối đất mà ra","KAI","katamari",0],["壊","HOẠI","phá hoại","10 con mắt dõi theo sự phá hoại y phục vứt xuống đất","KAI","kowa(su), kowa(reru)",0],["怪","QUÁI","kì quái, quái vật","Thấy ngườ kì QUÁI đi CHÂN ĐẤT con TIM dựng lên vì run sợ","KAI","aya(shii), aya (shimu)",0],["悔","MỖI","hối hận","Mỗi ngày trôi qua con tim lại dựng lên vì hối tiếc ( cảm ơn b đã động viên.","KAI","ku(iru), ku (yamu), kuya (shii)",0],["懐","HOÀI","hoài cổ","10 con mắt trái tim hoài niệm về bộ y phục","KAI","futokoro, natsu (kashii), natsu (kashimu), natsu(ku), natsu(keru)",0],["戒","GIỚI","cảnh giới","Cúng tay.. để được qua biên giới..","KAI","imashi(meru)",0],["拐","QUẢI","bắt cóc","Kẻ bắt cóc tay cầm dao bịt miệng con tin","KAI","",0],["慨","KHÁI","khảng khái, phẫn khái","Trái tim tốt sẽ ko than vãn - trái tim QUÈ QUẶT thì luôn THAN THỞ","GAI","",0],["概","KHÁI","khái niệm, đại khái","đại KHÁI là đã KÝ既 hết lên cây木 RỒI既","GAI","",0],["街","NHAI","phố xá","Hai mảnh đất có con đường đi qua gọi là khu phố","GAI, KAI","machi",0],["該","CAI","bao quát","(亥) (言) nếu thấy lợn nói chuyện thì nên đi CAI nghiện","GAI","",0],["核","HẠCH","hạt nhân, hạch tâm","4 người đội mũ nhặt hạt dứoi gốc cây","KAKU","",0],["獲","HOẠCH","thu hoạch","Con CHÓ đuổi bắt được con CHIM trên đồng cỏ","KAKU","e(ru)",0],["穫","HOẠCH","thu hoạch","Đến mùa thu hoạch lúa lại thấy chim thảo bay về","KAKU","",0],["隔","CÁCH","khoảng cách","隔 Bạn (B) và Tôi (T) bị ngăn cách nhau 10 năm bởi tôi bị nhốt trong nhà","KAKU","heda(teru), heda(taru)",0],["恰","KHÁP","khớp, vừa vặn","Ngọai hình nhìn rất Hợp Tâm","","",0],["渇","KHÁT","khát nước, khát khao","1 NGÀY日 uống biết BAO 勹 nhiêu THÌA 匕NƯỚC mà vẫn KHÁT khô cổ.","KATSU","kawa(ku)",0],["滑","CỐT","trượt, giảo hoạt","bộ xương đc ngâm nước trở nên trơn tru","KATSU","sube(ru), name (raka)",0],["叶","DIỆP","đáp ứng, phù hợp, thoả mãn","Một mình anh diệp đáp ứng mừoi cái miệng","","",0],["株","CHU/CHÂU","cổ phiếu","bên cạnh gốc cây là con bò mặc váy. Vì bò mặc váy là đồ hiếm nên được bán cổ phiếu","","kabu",0],["刈","NGẢI","cắt cỏ","giải quyết ngắn gọn, dùng dao cắt đứt luôn","","ka(ru)",0],["勘","KHÁM","So sánh, định lại. khám định","4 lần dùng lực để bóp quả cam thì phải xem lại, khám lại","KAN","",0],["勧","KHUYẾN","khuyến cáo","Khuyến khích người nằm ngang dùng lực chơi bắn chim. Vì nằm ngang mà bắn trúng mói giỏi và khác biệt chứ","KAN","susu(meru)",0],["喚","HOÁN","hô hoán","Miệng lớn hô hoán tứ tiếng","KAN","",0],["堪","KHAM","chịu đựng, kham nhẫn","để có đc một mảnh đất phải cam chịu bốn thời kì khổ sở","KAN","ta(eru)",0],["寛","KHOAN","khoan dung","Xem hoa trong nhà thật là khoan khoái","KAN","",0],["幹","CÁN","cán sự, cán bộ","NGƯỜI CÁN bộ mang mệnh CAN thường làm việc NHANH nhẹn gấp MƯỜI lần.","KAN","miki",0],["敢","CẢM","dám, dũng cảm","Người làm Công (工) bị Đánh (攵) vào Tai (耳) thì sẽ dũng Cảm đứng lên","KAN","",0],["歓","HOAN","hoan nghênh","Người nằm ngang thiếu chim để hoan hỉ(đây là anh dương quá bị mất chim nhé)","KAN","",0],["環","HOÀN","hoàn cảnh, tuần hoàn","Nhà vua dạy Không 不sai . Mắt 目 mồm 口 luôn tuần hoàn 環 với nhau","KAN","",0],["甘","CAM","ngọt, cam chịu","ngày 日nào cũng thảo(bộ thảo)mai =}ngọt ngào","KAN","ama(i), ama (eru), ama (yakasu)",0],["監","GIAM, GIÁM","giam cấm; giám đốc, giám sát","Dù có là THẦN thánh mà NẰM bò vào ăn cắp MỘT cái ĐĨA cũng bị tống GIAM","KAN","",0],["看","KHÁN","khán giả","Khán giả mắt vừa xem tay giơ lên vỗ tay hưởng ứng","KAN","",0],["緩","HOÃN","hòa hoãn","Dây kéo dài trì hoãn việc nhận bằng hữu","KAN","yuru(i), yuru (yaka), yuru (mu), yuru (meru)",0],["貫","QUÁN","xuyên qua, quán xuyến","Có ruộng và tiền sẽ quán triệt được tất","KAN","tsuranu(ku)",0],["鑑","GIÁM","giám định","Muốn giám định vàng thì từng người một mở ngang con mắt ở cự li gần","KAN","",0],["陥","HÃM","vây hãm","Vào một ngày bờ sông bị vây hãm quanh các góc giác","KAN","ochii(ru), otoshii(reru)",0],["含","HÀM","hàm ý, hàm nghĩa, hàm súc","Ngay cả bây giờ thì miệng vẫn bao gồm cả Hàm, chưa bị vã rụng ra","GAN","fuku(mu), fuku (meru)",0],["眼","NHÃN","nhãn khoa","MẮT TỐT là có NHÃN quan tốt","GAN, GEN","manako",0],["頑","NGOAN","ngoan cường, ngoan cố","NGOAN cố giữ nguyên cái đầu.","GAN","",0],["企","XÍ","xí nghiệp, xí hoạch","Dừng lại làm ở trong nhà thì là xí nghiệp","KI","kuwada(teru)",0],["伎","KỸ","Tài. Con nhà nghề., kỹ xảo","亻để 支 伎 người ý đến từng chi tiết chắc chắc là người có (KĨ) năng tốt","","",0],["奇","KÌ","kì lạ, kì diệu","Cái gì to mà khả dụng thì rất là kì diệu","KI","",0],["嬉","HI","hạnh phúc","cô gái（ 女）nhặt 10 （十） hạt đậu（豆）cho vào miệng（口） thấy hạnh phúc. （嬉）, sau đó bón phân URE ( ureshi)","","",0],["幾","KỶ","hình học","Người qua 2 lần yêu từ NHỎ","KI","iku",0],["幾","KI","hình học","Người QUA 2 lần YÊU 幺 biết BAO NHIÊU cho đủ","KI","iku",0],["揮","HUY","phát huy, chỉ huy","Tay chỉ huy quân đội","KI","",0],["旗","KỲ","quốc kì","Người NẰM NGANG cầm theo quốc KỲ vẫy theo nhiều PHƯƠNG","KI","hata",0],["既","KÍ","đã","cái RĂNG XẤU thì ĐÃ bị nhổ đi rồi cậu ạ","KI","sude(ni)",0],["既","KÝ","đã","làm KHÔNG TỐT nên đã bị thành thag què tay gãy chân","KI","sude(ni)",0],["棋","KÌ","môn cờ","Quân cờ làm từ cây (木) cam (甘","KI","",0],["棄","KHÍ","từ bỏ","Bỏ quên 30 cây trong quá khứ ngoài không khí","KI","",0],["稀","HI","hi hữu, hiếm","Hi hữu mới dùng kéo cắt vải để cắt lúa","","",0],["軌","QUỸ","quỹ đạo","XE (車) chạy 9 (九) vòng QUỸ (軌) đạo","KI","",0],["輝","HUY","lấp lánh","dưới hào QUANG của đảng, QUÂN đội sẽ phát triển HUY hoàng, rực rỡ.","KI","kagaya(ku)",0],["飢","CƠ","đói, cơ ngạ","CƠ thể đói quá ĂN luôn cả GHẾ","KI","u(eru)",0],["儀","NGHI","nghi thức","NGƯỜI nhân NGHĨA tuân thủ lễ nghi","GI","",0],["宜","NGHI","thích nghi, tiện nghi","ở nhà 3 tầng thì thật tiện nghi","GI","",0],["擬","NGHĨ","mô phỏng, bắt chước","Lúc tay 手、chân 足 rảnh rỗi ( ヒマ) thì hay suy nghĩ BẮT CHƯỚC làm mũi tên 矢","GI","",0],["欺","KHI","lừa dối","KHI đến Kì mà Thiếu nợ thì hay LỪA DỐI","GI","azamu(ku)",0],["犠","HI","hi sinh","Con bò hi sinh vì nghĩa 義 lớn","GI","",0],["疑","NGHI","nghi ngờ, nghi vấn, tình nghi","rỗi(ヒマ) Ten(矢)ở Chân(足)=>Thật Rảnh gì mà lại dấu mũi bên đáng Nghi Ngờ","GI","utaga(u)",0],["義","NGHĨA","ý nghĩa, nghĩa lí, đạo nghĩa","Chiến binh vì chính Nghĩa, tay手cầm thuẩn戈, đầu đội mũ lông cừu羊","GI","",0],["誼","NGHỊ","hội nghị","nói chuyện ngọt ngào dưới mái nhà là tình hữu nghị","","",0],["却","KHƯỚC","khước từ","Dùng đao chặt bỏ khước từ quá khứ","KYAKU","",0],["丘","KHÂU","đồi","cầm rừu lên đồi không may bị đứt tay khâu 1 mũi","KYUU","oka",0],["及","CẬP","phổ cập","phổ cập cho 3 người","KYUU","oyo(bu), oyo (bi), oyo(bosu)",0],["求","CẦU","yêu cầu, mưu cầu","Thời xưa lập đàn cầu mưa 10 ngày mới có nước","KYUU","moto(meru)",0],["汲","CẤP","Múc nước.","Ba người hợp sức múc nước trong giếng","","",0],["窮","CÙNG","cùng cực","Bắn cung vào thân, chết nằm dưới huyệt sâu tận cùng","KYUU","kiwa(meru), kiwa(maru)",0],["拒","CỰ","cự tuyệt","Tay cầm khiên chống cự","KYO","koba(mu)",0],["拠","CƯ","căn cứ, chiếm cứ","Muốn xử lí 処 trong tay 扌 phải có chứng cứ 拠","KYO, KO","",0],["挙","CỬ","tuyển cử, cử động, cử hành","(光) (手) (あがる) (挙) dưới ánh SÁNG , tuyển THỦ GIƠ tay xin ứng CỬ","KYO","a(geru), a (garu)",0],["虚","HƯ","hư vô","Xếp thành 7 hàng trên sườn núi nhìn về hư không","KYO, KO","",0],["虚","HƯ","hư vô","hô虍 răng con hổ và xếp thẳng hàng được thì thật là hư cấu","KYO, KO","",0],["供","CUNG","cung cấp, cung phụng","共 Cung Cấp Người làm dịch vụ Công Cộng","KYOO, KU","sona(eru), tomo",0],["怯","KHIẾP","nhát, khiếp đảm","Khiếp sợ quá Khứ đau Lòng","","",0],["恐","KHỦNG","khủng bố, khủng hoảng","CÔNG TÂM RỒI mà vẫn sợ kinh KHỦNG","KYOO","oso(reru), oso (roshii)",0],["狂","CUỒNG","cuồng sát","ông VUA rất cuồng ăn thịt CHÓ","KYOO","kuru(u), kuru (oshii)",0],["脅","HIẾP","uy hiếp","3 tên dùng Lực uy HIẾP chị Nguyệt","KYOO","obiya(kasu), odo(su), odo (kasu)",0],["興","HƯNG","hưng thịnh, phục hưng; hứng thú","hai cái cầu thang giống nhau thật thú vị","KOO, KYOO","oko(ru), oko (su)",0],["鏡","KÍNH","gương kính","đứng nhìn mình trc một tấm kim loại được gọi là gương đồng","KYOO","kagami",0],["響","HƯỞNG","ảnh hưởng, âm hưởng","Âm 音thanh quê hương 郷 ảnh HƯỞNG đến tôi.","KYOO","hibi(ku)",0],["驚","KINH","kinh ngạc, kinh sợ","con NGỰA mà biết dùng KÍNH ngữ thì quả là KINH ngạc","KYOO","odoro(ku), odoro(kasu)",0],["仰","NGƯỠNG","ngưỡng mộ","Một người ngước lên nhìn đĩa CD","GYOO, KOO","ao(gu), oo(se)",0],["凝","NGƯNG","ngưng kết, ngưng tụ","NGHI(疑) NGƯNG(凝) BĂNG(冫) ngờ do trời lạnh mà hơi nước bị tụ thành","GYOO","ko(ru), ko (rasu)",0],["僅","CẬN","ít","CHỦ（主）thì một NGƯỜIđứng phủ CỎ đầy mồm ông đích thị là bị CẬNrồi","","",0],["筋","CÂN","gân cơ","Dùng Sức để vác Hai Cây Trúc dưới ánh Trăng, thật là mỏi Cơ Bắp","KIN","suji",0],["緊","KHẨN","khẩn cấp, khẩn trương","Quần thần (Thần) qua qua lại lại (Hựu) xoắn xuýt (Mịch) hết cả lên hẳn là có việc KHẨN","KIN","",0],["謹","CẨN","kính cẩn, cẩn trọng","Nói ngôn từ với vua trung hoa phải cẩn trọng","KIN","tsutsushi(mu)",0],["矩","CỦ","hình vuông","Cự巨 Dùng mũi tên kháng quy Củ","","",0],["駆","KHU","khu trục hạm","駆る 馬 区 Đánh xe ngựa thật nhanh về khu căn cứ để báo tin.","KU","ka(keru), ka(ru)",0],["愚","NGU","ngu ngốc","để TÂM đến DẤU CHÂN thằng NGU nào in trên RUỘNG","GU","oro(ka)",0],["遇","NGỘ","tao ngộ, đãi ngộ","Đi ra đường mới ngộ ra cái ngu của mình.","GUU","",0],["屈","KHUẤT","khuất phục","Thấy chết mà vẫn xông lên quả thật là bất khuất","KUTSU","",0],["窟","QUẬT","lỗ","đào lỗ khai quật được cái hang có cánh cửa đi ra","","",0],["熊","HÙNG","Con gấu","Anh HÙNG cứu Hoả phải có Năng lực bắt GẤU","","",0],["繰","SÀO","Quay; quấn; cuộn; mở; lần; xe","Lấy Dây cột Sản Phẩm vào Cây Sào","","ku(ru)",0],["刑","HÌNH","hình phạt, tử hình","hình Phạt cầm đao đứng cạnh cái thang","KEI","",0],["恵","HUỆ","ân huệ","10 (THẬp) lần suy nghĩ (TƯ) về ân HUỆ đó","KEI, E","megu(mu)",0],["掲","YẾT","yết thị","giơ cánh tay dưới mặt trời sẽ bị hôi lách","KEI","kaka(geru)",0],["携","HUỀ","mang theo","Tay mang theo 13 con chim đề huề","KEI","tazusa(eru), tazusa(waru)",0],["稽","KÊ","cãi cọ","Cây lúa khổ luyện vơis con chó giữa mặt trời nóng bức nhưng vẫn cười hi","","",0],["継","KẾ","kế tục","Thừa KẾ cửa hàng bán GẠO với CHỈ","KEI","tsu(gu)",0],["警","CẢNH","cảnh báo, cảnh sát, cảnh vệ","Nói chuyện với anh CẢNH sát phải dùng NGÔN ngữ kính trọng (gọi là kính ngữ)","KEI","",0],["鶏","KÊ","con gà","(夫) (爪)/Gà (鶏) Phu quân chẳng cắt móng tay bày ra cái vặt ngay cái đùi","KEI","niwatori",0],["撃","KÍCH","công kích, tập kích","TAY(手) THÙ(殳) KÍCH(撃) XE(車) cầm công địch.","GEKI","u(tsu)",0],["撃","XUNG","công kích, tập kích","HÀNH行 động NẶNG重 sẽ tạo ra sự XUNG đột","GEKI","u(tsu)",0],["激","KÍCH, KHÍCH","kích động, kích thích, kích hoạt","Để Nước Trắng chảy đúng Phương hướng thì phải Đánh khẽ để Kích thích","GEKI","hage(shii)",0],["隙","KHÍCH","cái lỗ nhỏ","Bức tường có 2 lỗ nhỏ nhìn rõ ánh mặt trời","","",0],["桁","HÀNH","cái rầm gỗ, nhịp cầu","Đếm chữ số bằng cây hành","","",0],["傑","KIỆT","tuấn kiệt, hào kiệt","NGƯỜI KIỆT xuất đứng trên CÂY đến CHIỀU tối cả NĂM","KETSU","",0],["潔","KHIẾT","thanh khiết","Ông Chú Rót nước 注 lên cây đao 刀 nước chảy thành những sợi tơ 糸 thanh Khiết 清潔(せい けつ)","KETSU","isagiyo(i)",0],["健","KIỆN","khỏe mạnh, kiện khang, tráng kiện","NGƯỜI làm nghề KIẾN trúc phải có thân hình tráng KIỆN, khoe mạnh","KEN","suko(yaka)",0],["兼","KIÊM KIÊM NHIỀU VIỆC","kiêm nhiệm","Kiêm luôn cầm chổi quét nhà兼 : KIÊM (けん、げん、れん) kiêm nhiều việc 廉 : Kiêm thanh LIÊM nên có nhà 謙 : Kiêm nói lời KHIÊM tốn 嫌 : Nhưng Kiêm lại HIỀM khích với phụ nữ","KEN","ka(neru)",0],["剣","KIẾM","thanh kiếm","10 người đang đội mũ cầm kiếm","KEN","tsurugi",0],["喧","HUYÊN","tiếng trống inh ỏi, huyên náo","mồm tuyên bố cả ngày hôm nay ko đi ra khỏi nhà","","",0],["堅","KIÊN","kiên cố","đất của quan lại thì rất kiên cố","KEN","kata(i)",0],["堅","KIÊN","kiên cố","Mảnh đất lại được các vị thần hỗ trợ thì rất kiên cố ko bị xâm lăng","KEN","kata(i)",0],["憲","HIẾN","hiến pháp, hiến binh","Hiến pháp là quy tắc trong NHÀ cảm nhận bằng con TIM và phát sinh từ con MẮT","KEN","",0],["懸","HUYỀN","treo","một sợi chỉ buộc con tim của huyện tỉnh có màu huyền","KEN, KE","ka(keru), ka (karu)",0],["拳","QUYỀN","nắm đấm","1 quyền giữa háng 2 người đag đi.","","",0],["権","QUYỀN","chính quyền, quyền uy, quyền lợi","Quyền của con chim là đc nằm trên cây","KEN, GON","",0],["謙","KHIÊM","khiêm tốn","(Ngôn) từ của người (kiêm) nhiều chức vụ thường (khiêm )tốn","KEN","",0],["遣","KHIẾN","phân phát","Ông quan được cử đi khảo sát bên trong 中 của mộtー con đường","KEN","tsuka(u), tsuka (wasu)",0],["顕","HIỂN","hiển hách, hiển thị","Hiển hiện rõ trong đầu rằng mỗi ngày đều cần phải xếp hàng","KEN","",0],["原","NGUYÊN","thảo nguyên, nguyên tử, nguyên tắc","Thảo nguyên được bao trùm bởi những con dốc nhỏ màu trắng","GEN","hara",0],["厳","NGHIÊM","tôn nghiêm, nghiêm khắc, nghiêm trọng","Nếu k nghiêm khắc sẽ béo tai đánh vào mông cột dưới sườn núi 3 hôm","GEN, GON","ogoso(ka), kibi (shii)",0],["弦","HUYỀN","dây","dây cung màu đen huyền bí","GEN","tsuru",0],["源","NGUYÊN","nguồn, nguyên tuyền","Trên thảo NGUYÊN có NƯỚC(氵) chảy từ trên những SƯỜN NÚI NHỎ(小) màu Trắng(白)","GEN","minamoto",0],["故","CỐ","cố tổng thống, lí do","Đập nát đồ CỔ là sự CỐ lớn","KO","yue",0],["誇","KHOA","khoa trương","THÁI là thằng nói phét 5 lần NGÔN từ khoe khoang KHOA trương","KO","hoko(ru)",0],["跨","KHÓA","cưỡi","Băng qua ĐẠI LỘ NĂM lần","","",0],["顧","CỐ","nhìn lại","Nhìn lại cái cửa thì thấy cái đầu con chim đang lấp ló thò vào","KO","kaeri(miru)",0],["娯","NGU","vui chơi, ngu lạc","Nơi có phụ nữ miệng tới chân uốn éo là chỗ giải trí","GO","",0],["御","NGỰ","ngự uyển","Kẻ cầm đao ngự trị cả đường chính","GYO, GO","on",0],["誤","NGỘ","ngộ nhận","口nói 天giác Mồm chuyện trên trời Ngộ nhận mình là thiên tử","GO","ayama(ru)",0],["護","HỘ","bảo hộ, phòng hộ, hộ vệ","Nói lời bảo hộ cho những thứ yếu ớt như cỏ , chim , kẻ chéo chân","GO","",0],["光","QUANG","ánh sáng, nhật quang, quang minh","CON NGƯỜI ĐI đâu cũng cần có cái đầu SÁNG suốt (QUANG)","KOO","hika(ru), hikari",0],["公","CÔNG","công cộng, công thức, công tước","8 việc tư sẽ thành việc Công","KOO","ooyake",0],["功","CÔNG","công lao","CÔNG SỨC bỏ ra nhiều thì sẽ THÀNH CÔNG ...","KOO, KU","",0],["巧","XẢO","tinh xảo","Công việc làm 5 lần sẽ thành kĩ xảo","KOO","taku(mi)",0],["康","KHANG","kiện khang, khang trang","ngày ba ly nuớc nhà nhà kiện khang","KOO","",0],["恒","HẰNG","luôn luôn, hằng đẳng thức","1001 con tim HẰNG ngày chờ mong","KOO","",0],["慌","HOẢNG","hoảng hốt","con TIM HOẢNG hốt khi thấy cỏ(THẢO) chết trên SÔNG","KOO","awa(teru), awa (tadashii)",0],["抗","KHÁNG","chống, đề kháng","Tay không chân đất đầu đội mũ kháng chiến thời xưa","KOO","",0],["控","KHỐNG","khống chế","Một tay khống chế cả bầu trời","KOO","hika(eru)",0],["攻","CÔNG","tấn công, công kích","đánh vào công nhân là muốn công kích đình công","KOO","se(meru)",0],["梗","NGẠNH","cành cây, tắc nghẽn","1 NGƯỜI人 CANH tác trồng CÂY 木trên RUỘNG 田đất ương NGẠNH","","",0],["洪","HỒNG","hồng thủy","Nước cộng lại với nhau thành đại hồng thuỷ","KOO","",0],["溝","CÂU","mương nhỏ","Chỗ nước chảy đi chảy lại 40 lần tạo thành rãnh","KOO","mizo",0],["溝","CÂU","mương nhỏ","2 ông chủ tái cấu trúc lại đường dân nước về thôn bản","KOO","mizo",0],["絞","GIẢO","buộc, xử giảo","Sợi dây giao nhau là điểm thắt siết bóp…","KOO","shibo(ru), shi (meru), shi (maru)",0],["綱","CƯƠNG","kỉ cương","Dùng CHỈ bện thành dây CƯƠNG để leo UNG QUANH đồi NÚI 21 Ngày","KOO","tsuna",0],["衡","HÀNH","cái cân","Đi HÀNH quân bắt đc con CÁ TO về cân xem bao nhiêu lạng","KOO","",0],["酵","DIẾU","lên men","hiếu孝 Ủ rượu lên men thể hiện sự thảo","KOO","",0],["豪","HÀO","hào kiệt, phú hào","Nhà cao nuôi lợn thể hiện là hào gia giàu có","GOO","",0],["克","KHẮC","khắc phục","10 sư Huynh cùng nhau khắc phục","KOKU","",0],["刻","KHẮC","thời khắc","Dùng dao khắc hình 4 người đội mũ","KOKU","kiza(mu)",0],["穀","CỐC","ngũ cốc","Binh sĩ lấy Khăn che Lúa để tránh Kẻ thù trộm NGŨ cốc","KOKU","",0],["酷","KHỐC","tàn khốc","Uống RƯỢUvào thì sẽ tố CÁO nhau 1 cách tàn khốc","KOKU","",0],["忽","HỐT","chợt","Có VẬT (勿) gì đó chạm TIM (心) bất thình lình HỐT (忽) hoảng.","","",0],["惚","HỐT","hoảng hốt","Tim (忄) Hoảng HỐT như có con cào cào (勿) nhảy tưng bừng ở trong đó (心)","","",0],["頃","KHOẢNH","Thửa ruộng trăm mẫu. Vụt chốc","Khi nhìn thấy cái thìa 匕, trong đầu 頁 nhớ đến ngay Khoảnh khắc ăn uống","","",0],["墾","KHẨN","khai khẩn, khẩn hoang","KHAI KHẨN ĐẤT ĐAI LÀM LƯƠNG VÀ NUÔI LỢN","KON","",0],["婚","HÔN","kết hôn, hôn nhân","trong ngày kết hôn, người con gái đổi họ","KON","",0],["恨","HẬN","căm hận","tâm thấy Hận vì tên kia đã KHÔNG TỐT với mình","KON","ura(mu), ura (meshii)",0],["紺","CÁM","xanh đậm","Cho Chỉ vào cốc nước Cam sẽ biến thành màu Xanh biếc","KON","",0],["魂","HỒN","linh hồn","Mây kéo đến quỷ xuất hiện","KON","tamashii",0],["唆","TOA","xúi giục","Cái mồm điêu TOA luôn xúi giục ô mũi to đi theo sau","SA","sosonoka(su)",0],["詐","TRÁ","lừa dối","Loi noi 言 qua Chế biến (作る) là dối TRÁ","SA","",0],["鎖","XÍCH","xích, bế tỏa, tỏa cảng","Cắm ba que tạo thành xiềng xích phong tỏa tiền và vàng","SA","kusari",0],["催","THÔI","tổ chức, khai thôi, thôi thúc","Chim kêu thôi thúc người dứoi núi","SAI","moyoo(su)",0],["塞","TẮC","lấp kín","（共）một （一）miếng （土）nên mất hẳn ngôi nhà cộng đất bị bế TẮC","","",0],["彩","THẢI","sắc thái","Có 7 sắc thái cầu vòng mọc trên cây(4 cái ở trên, 3 cái ở bên)","SAI","irodo(ru)",0],["栽","TÀI","trồng","Cây mọc Qua Đất quả là Tài","SAI","",0],["災","TAI","tai họa","Ngày xưa lửa và sông nước đc xem là mối tai hoạ khi đi đường sinh sống","SAI","wazawa(i)",0],["砕","TOÁI","phá vỡ","Đập tan nát 9,10 cục đá phiền toái","SAI","kuda(ku), kuda (keru)",0],["裁","TÀI","may vá, tài phán, trọng tài","Cuộc chiến đất đai y phục cần có tài phán xử chia cắt, và quan trọng hơn nữa cần dùng vũ lực giáo mác để quyết định","SAI","ta(tsu), saba (ku)",0],["載","TẢI","đăng tải","Xe đi qua chở đất là xe Tải","SAI","no(seru), no (ru)",0],["冴","NGÀ","khéo léo","Nha牙 Băng冫 sĩ bó KHÉO LÉO cho NGÀ","","",0],["冴","NGÀ","khéo léo","Đóng băng cái răng nha lại để ngọc NGÀ sáng sủa","","",0],["阪","PHẢN","Sườn núi.","PHẢN đối việc Bán Mông ở OSAKA 大阪","","",0],["削","TƯỚC","gọt, tước đoạt","tiêu diệt kẻ địch cần tước đoạt vũ khí đao kiếm của chúng","SAKU","kezu(ru)",0],["搾","TRÁ","vắt, ép","Dùng tay không ép hoa quả bằng cái cào sưa","SAKU","shibo(ru)",0],["窄","TRÁCH","chật hẹp","Lấy tay cào ra cái LỖ nên chỉ cào được cái lỗ NHỎ, CHẬT HẸP","","",0],["錯","THÁC","thác giác, thác loạn","tiền khi xưa chỉ để thác loạn, không cần mài giữa, tiêu luôn","SAKU","",0],["撮","TOÁT","chụp ảnh","Điều TỐI kị của các cao THỦ chụp ảnh là TOÁT mồ hôi tay.","SATSU","to(ru)",0],["擦","SÁT","trà sát","sát察 Cảnh dùng tay xoa xát kẻ phạm tội","SATSU","su(ru), su(reru)",0],["錆","THƯƠNG","gỉ sét","Kim loại mà biến thành màu xanh thì đã bị gỉ sét","","",0],["惨","THẢM","thảm thương, thảm sát","Tâm Tham sẽ gặp bi THẢM","SAN, ZAN","miji(me)",0],["惨","THẢM","thảm thương, thảm sát","Gặp phải thảm hoạ đau tim khi tham参 gia làm hành khách trên chuyến tàu titanic định mệnh","SAN, ZAN","miji(me)",0],["酸","TOAN","axit","RƯỢU( 酉) SAU(夂) khi lên men quá mức THÀNH THẬT(允) là đã bị CHUA","SAN","su(i)",0],["斬","TRẢM","chém đầu","Xe có Dao là Cẩu đầu TRẢM của bao thanh Thiên","","",0],["暫","TẠM","tạm thời","Tạm thời cho tôi đỗ chiếc xe này gần mặt trời","ZAN","",0],["司","TI","công ti, tư lệnh","Làm QUẢN LÝ trong công TI Nói 1一 lời口 chăc như Đinh đóng cột","SHI","",0],["姿","TƯ","tư thế, tư dung, tư sắc","hình dáng người phụ nữ tiếp theo","SHI","sugata",0],["施","THI","thực thi, thi hành","Một người nằm dưới đất thì có phương pháp thi hành tốt","SHI, SE","hodoko(su)",0],["賜","TỨ","ban cho, ban tặng","vào NGÀY đi săn VẬT mà săn được nhiều nhất thì được THƯỞNG TIỀN","SHI","tamawa(ru)",0],["賜","TỨ","ban cho, ban tặng","TỨ hôn, thưởng TIỀN cho người nào bắt được nhiều VẬT nhất trong NGÀY đi săn thú","SHI","tamawa(ru)",0],["雌","THƯ","giống cái","Chim cái dừng lại cười hi","SHI","me, mesu",0],["慈","TỪ","từ bi, nhân từ","Sự nhân từ là thứ huyền (玄) bí của 心","JI","itsuku(shimu)",0],["磁","TỪ","từ tính, từ trường","Từ viên đá phát ra từ trường, như 2 đôi đang đội mũ yêu nhau","JI","",0],["蒔","THÌ","hạt, gieo hạt","hạt cây thì là phải được gieo đúng thời điểm mùa vụ","","",0],["叱","SẤT","Quát. Kêu lên.","mồm 3 mồm 7 chỉ trích con cháu","","",0],["執","CHẤP","cố chấp","chấp 執 nhận hạnh 幸 phúc sẽ trọn vẹn 丸..","SHITSU, SHUU","to(ru)",0],["嫉","TẬT","ghen ghét","Sự ghen ghét như bệnh tật, như mũi tên găm sâu vào bản tính của phụ nữ","","",0],["芝","CHI","cỏ","Bãi cỏ hình chữ z","","shiba",0],["射","XẠ","xạ thủ","Phóng Xạ trúng bản THÂN thì thật THỐN","SHA","i(ru)",0],["煮","CHỪ","luộc","Nhóm lửa nấu kẻ giả danh học giả","SHA","ni(ru), ni(eru), ni(yasu)",0],["謝","TẠ","cảm tạ, tạ lỗi","NÓI với bản THÂN rằng dù có THỐN cũng phải cảm TẠ …","SHA","ayama(ru)",0],["遮","GIÀ","ngăn chặn","Người già đốt đèn có chắn gió để đi lên sườn núi","SHA","saegi(ru)",0],["蛇","XÀ","con rắn","con sâu(虫) ngậm thìa (匕) dưới mái nhà cườ hihi匕匕( 宀) hoá ra là con Rắn","JA, DA","hebi",0],["蛇","XÀ","con rắn","(虫) (宅) (蛇) con sâu mà bò vào nhà là con rắn","","",0],["邪","TÀ","tà ma","Nhe răng đứng núp sau khu đất làm điều gian tà","JA","",0],["若","NHƯỢC","trẻ, nhược niên","Phải(右)có nhiều cỏ (lông, tóc) thì mới là Trẻ ( nhược). Phải ăn nhiều cỏ thì mới trẻ dc, không thì chóng chêt lắm","JAKU, NYAKU","waka(i), mo (shikuwa)",0],["寂","TỊCH","cô tịch, tịch mịch","Trong nhà từ trên xuống nhỏ chẳng ai chơi cùng nên thật là buồn","JAKU, SEKI","sabi, sabi(shii), sabi(reru)",0],["殊","THÙ","đặc thù","MỘT (一) ĐÊM (夕) ĐỎ tươi (朱) là đặc THÙ (殊) đêm tử trận","SHU","koto",0],["狩","THÚ","săn bắn","đi săn con thú đang cố thủ trong nhà","SHU","ka(ru), ka(ri)",0],["珠","CHÂU","châu ngọc","Ngọc của vua màu ĐỎ thẫm","SHU","",0],["趣","THÚ","hứng thú, thú vị","Lấy 取る hứng thú làm động lực chạy走る cho nhanh","SHU","omomuki",0],["授","THỤ","đưa cho, truyền thụ, giáo thụ","dùng Tay truyền thụ những gì đã nhận được(Thụ)","JU","sazu(keru), sazu(karu)",0],["樹","THỤ","cây, cổ thụ","村 十 豆 ở giữa ngôi làng có 10 cây đậu cổ THụ","JU","",0],["需","NHU","nhu yếu","Có nhu cầu thì mưa cũng xếp 4 hàng","JU","",0],["収","THU","thu nhập, thu nhận, thu hoạch","4 mùa qua lại, thích nhất mùa nào bội Thu","SHUU","osa(meru), osa (maru)",0],["収","THU","thu nhập, thu nhận, thu hoạch","Nghề Tay thu lượm 4 mùa","SHUU","osa(meru), osa (maru)",0],["宗","TÔN, TÔNG","tôn giáo","ở dưới mái nhà thì không được kì thị chuyện tôn giáo","SHUU, SOO","",0],["就","TỰU","thành tựu","(尤) Cả dòng họ VƯU đỗ qua to trên KINH đô thật là thành TỰU đáng ngạc nhiên","SHUU, JU","tsu(ku), tsu (keru)",0],["修","TU","tu sửa, tu chính, tu luyện","bị NGƯỜI ta cầm GẬY ĐÁNH vì đi TU mà để TÓC","SHUU, SHU","osa(meru), osa (maru)",0],["愁","SẦU","buồn bã, sầu thương","mùa thu cây lá đỏ như lửa sinh tâm trạng u sầu buồn bã","SHUU","ure(eru), ure(i)",0],["秀","TÚ","ưu tú, tuấn tú","chọn ra 13 cây lúa ưu tú nhất","SHUU","hii(deru)",0],["臭","XÚ","mùi thối, xú khí","TỰ cao tự ĐẠI thì thật XÚ uế, hôi thối","SHUU","kusa(i)",0],["衆","CHÚNG","quần chúng, chúng sinh","Quần chúng mặc y phục đi hiến máu","SHUU, SHU","",0],["襲","TẬP","tập kích","Khủng Long mặc y phục để tập kích con người !","SHUU","oso(u)",0],["蹴","XÚC","chạy theo","東京 Dùng chân CHẠY THEO rồi đá con chó ở kinh đô","","",0],["酬","THÙ","thù lao","Sang CHÂU 州 âu buôn rượu 酒 vài năm được THÙ LAO rất nhiều","SHUU","",0],["充","SUNG","sung túc, bổ sung","Người có mũ đội là ăn sung mặc sướng","JUU","a(teru)",0],["充","SUNG","sung túc, bổ sung","tôi lúc còn sung sức đội mũ chạy khắp nơi","JUU","a(teru)",0],["充","SUNG","sung túc, bổ sung","ăn SUNG vác nón chân chạy tứ tung vì sướng quá","JUU","a(teru)",0],["従","TÙNG","phục tùng, tùy tùng, tòng thuận","Chân phục tùng theo đường đi","JUU, SHOO, JU","shitaga(u), shitaga(eru)",0],["従","TÙNG","phục tùng, tùy tùng, tòng thuận","彳 足 従 Xích chân lại theo anh Tùng hai / râu","JUU, SHOO, JU","shitaga(u), shitaga(eru)",0],["縦","THAO TÚNG","tung hoành, tung độ","đi theo cái dây để đo chiều dọc","JUU","tate",0],["銃","SÚNG","khấu súng","lệnh hồ sung được tặng khẩu SÚNG bằng vàng","JUU","",0],["叔","THÚC","chú, thúc phụ","Đứa nhỏ gọi bề trên là thúc. Thúc tuy là bề trên nhưng lại dưới bố","SHUKU","",0],["縮","SÚC","co lại","Chỉ vì sợi dây mà 100 người trong nhà Súc nhau","SHUKU","chiji(mu), chiji (maru), chiji (meru), chiji (reru), chiji (rasu)",0],["粛","TÚC","nghiêm túc","Tay làm lúa bên sông phải cực kì nghiêm túc","SHUKU","",0],["塾","THỤC","tư thục","đứa trẻ đội mũ chạy vòng tròn trên bãi đất","JUKU","",0],["熟","THỤC","hiền thục, thục nữ","Đứa trẻ được tập luyện tỉ mĩ thuần thục khi có hoả hoạn thì mồm kêu to đồng thời cuộn tròn lại","JUKU","u(reru)",0],["瞬","THUẤN","trong nháy mắt","thời gian trôi nhanh nháy mắt 3 lần đã đến chiều tối cuối năm","SHUN","matata(ku)",0],["循","TUẦN","tuần hoàn","Trên đường (彳) đi Tuần trên Sườn núi gặp 10 ánh Mắt dõi theo bước chân","JUN","",0],["潤","NHUẬN, NHUẦN","lợi nhuận, nhuận tràng","Vua đứng trước cổng chia lợi nhuận cho mọi người, mọi người cảm động, nước mắt đầm đìa","JUN","uruo(u), uruo (su), uru(mu)",0],["盾","THUÂN","mâu thuẫn","Dưới SƯỜN NÚI có 10 CON MẮT mâu thuẫn nhau","JUN","tate",0],["盾","THUẪN","mâu thuẫn","dùng cái khiên bảo vệ 10 con mắt","JUN","tate",0],["遵","TUÂN","tuân thủ","Trên đường TÔN 尊trọng , TUÂN thủ luật lệ.","JUN","",0],["処","XỨ","cư xử, xử trí, xử lí; nơi chỗ","chân duỗi thoải mái dưới gầm bàn để XỬ lý công việc","SHO","tokoro",0],["庶","THỨ","thứ dân","Nhà và Ánh Đèn là NHỮNG THỨ phải có trong cuộc sống","SHO","",0],["緒","TỰ","tình tự","Học giả 者 mua dây 糸 về TỰ làm mọi thứ.","SHO, CHO","o",0],["序","TỰ","trình tự","DỰ ngồi trong nhà chờ đến thứ tự","JO","",0],["徐","TỪ","từ từ","DƯ thời gian nên cứ bước chân TỪ TỪ","JO","",0],["除","TRỪ","trừ khử, trừ bỏ, loại trừ, phép chia","2 thằng nhỏ đội nón đi vào tường thành thì được miễn trừ chi phí. Nếu mà dư ra em bồ thì phải trừ một em cho tau","JO, JI","nozo(ku)",0],["傷","THƯƠNG","tổn thương, thương tật","một nải chuối đỡ một ông mặt trời và một người đứng một người nằm thì bị thương","SHOO","kizu, ita(mu), ita(meru)",0],["償","THƯỜNG","bồi thường","賞 thườnｇ 償 không có người người mày thì được thưởng có người như mày lại bồi","SHOO","tsugu(nau)",0],["匠","TƯỢNG","nghệ nhân","Chiếc Rìu trong tủ kia là của anh Thợ tạc Tượng","SHOO","",0],["嘗","THƯỜNG","Nếm. Thử. Từng","đã có thời ngày qua ngày (日) ngồi nhà（ヒ） há miêng(口) chờ sung","","",0],["奨","TƯỞNG","tưởng thưởng","Tương将 lai vào Đại học được TƯỞNG THƯỞNG","SHOO","",0],["尚","THƯỢNG","cao thượng","Tiểu Hoà THƯỢNG loanh quanh có 3 sợi tóc, miệng đọc kinh","SHOO","",0],["捷","TIỆP","nhanh","người mẫn tiệp là bước một bước, dơ một tay là có thể viết một bài thơ","","",0],["渉","THIỆP","can thiệp, giao thiệp","can THIỆP bọn lính THỦY đánh BỘ 渉 , bát bọn nó lúc thì đi bộ, lúc thì đi nước","SHOO","",0],["焦","TIÊU","cháy","Con CHIM bị CHÁY thì TIÊU đời rồi còn gì","SHOO","ko(geru), ko (gasu), ko (gareru), ase (ru)",0],["焦","TIÊU","cháy","Dùng LỬA nướng CHIM \"vội quá\" nên \"cháy\" mất TIÊU","SHOO","ko(geru), ko (gasu), ko (gareru), ase (ru)",0],["祥","TƯỜNG","cát tường","mặc áo lông cừu sẽ may mắn cát tường","SHOO","",0],["称","XƯNG","xưng tên, danh xưng","Chú Tiểu Nằm XƯNG tên Hoà","SHOO","",0],["衝","XUNG","xung đột, xung kích","Sức nặng của sự xung đột bị chia làm 2 ngã đường","SHOO","",0],["障","CHƯỚNG","chướng ngại","早 立 Đến sớm đứng chờ nhưng gặp chướng ngại vật là cái mông","SHOO","sawa(ru)",0],["冗","NHŨNG","Thừa; không cần thiết, nhũng nhiễu","quan đội KHĂN ngồi GHẾ gây NHŨNG nhiễu cho người dân","JOO","",0],["剰","THẶNG","thặng dư","phần được cắt刂 ra từ phần dư thừa乗 gọi là thặng dư","JOO","",0],["嬢","NƯƠNG","cô gái, quý cô","6(六) (丼) (衣) Cô Nương đi lấy ck. Được tặng cho cái tô và bộ y phục","JOO","",0],["杖","TRƯƠỢNG","Cái gậy chống","cây gậy dùng cho người bị khuyết tật(khuyết tật nên chân bị lệch)","","",0],["譲","NHƯỢNG","nhượng bộ","Nói 6 lời nhượng bộ gộp 2 biểu đất","JOO","yuzu(ru)",0],["飾","SỨC","trang sức","Người có của ăn của để (食) ở thành thị (市) thường thích làm đẹp, trang trí, đeo trang SỨC","SHOKU","kaza(ru)",0],["織","CHỨC","dệt","識 TỔ CHỨC: : Nói tri thức 織 : Nối tổ chức 職 : Nghe công việc","SHOKU, SHIKI","o(ru)",0],["織","CHỨC","dệt","chiến đấu với những sơij chỉ phát ra âm thanh gọi là dệt vải","SHOKU, SHIKI","o(ru)",0],["蝕","THỰC","đục khoét","bị SÂU BỌ (虫GẶM ( ) thì là đục khoét.","","",0],["侵","XÂM","xâm lược","đang ngủ thả tóc buông tay dạng chân mà có ngừoi xâm nhập đứng 1 bên","SHIN","oka(su)",0],["審","THẨM","thẩm tra, thẩm phán, thẩm định","phiên番 Trong nhà có toà phúc thẩm","SHIN","",0],["慎","THẬN","thận trọng","Con tim chân thật thì rất cẩn thận( khi hứa, khi phát biểu)","SHIN","tsutsushi(mu)",0],["振","CHẤN","chấn động","THẦN ra TAY làm CHẤN động mặt đất","SHIN","fu(ru), fu(ruu)",0],["浸","TẨM","ngâm tẩm","Thả tóc chạng chân buông tay ngâm mình trong nước","SHIN","hita(su), hita (ru)",0],["診","CHẤN","chẩn đoán","chuẩn đoán bệnh qua lời khai và mái tóc","SHIN","mi(ru)",0],["尋","TẦM","sưu tầm, tầm nã","Tầm 3 giờ làm ở Công trường mà Miệng cứ Hỏi mấy giờ thấy Thốn thật đấy","JIN","tazu(neru)",0],["甚","THẬM","thậm chí","bốn lần ngọt thì cực kì kinh khủng","JIN","hanaha(da), hanaha(dashii)",0],["尽","TẪN","tận lực","TẬN sức phá Xích Băng","JIN","tsu(kusu), tsu (kiru), tsu (kasu)",0],["迅","TẤN","nhanh chóng","đi bằng con đường này nhanh gấp 10 lần qua sườn núi kia hehe","JIN","",0],["厨","TRÙ","món ngon","trù phòng (ngự thiện phòng) là nơi 1 tấc đậu hũ cũng phải làm thành món ngon","","",0],["垂","THÙY","rủ xuống","Nặng重 垂 thì rủ xuống","SUI","ta(reru), ta (rasu)",0],["推","THÔI","giới thiệu, thôi tiến","Tay vừa cầm chim vừa suy luận","SUI","o(su)",0],["粋","TÚY","tinh túy","Tính tuý từ 9,10 hạt gạo","SUI","",0],["衰","SUY","suy thoái","mắc covid nên Suy yếu phải đội mũ đeo khẩu trang và mặc quần áo kín mít","SUI","otoro(eru)",0],["酔","TÚY","say","uông 90 chén rượu thì chả say","SUI","yo(u)",0],["錐","TRUỲ","cái chuỳ, cái dùi","Con chim có cái mỏ nhọn bằng vàng","","",0],["嵩","TUNG","Khối lớn; thể tích; số lượng","Tiêu xài lung TUNG làm chi phí Tăng Cao như Núi","","",0],["雛","SỒ","gà con","Gà con hai chân chạy lon ton","","",0],["据","CƯ","đặt, để","tay đặt đồ cổ dưới cửa","","su(eru), su (waru)",0],["裾","CƯ","VẠT ÁO","y phục của tử thi đã cũ nhưng có 1 chứng Cứ là vạt áo bị rách","","",0],["澄","TRỪNG","trong, rõ","Thanh TRỪNG sạch NƯỚC để đăng登 cai","CHOO","su(mu), su (masu)",0],["是","THỊ","đúng, thị phi","Hàng ngày 日 cố gắng làm chuyện ĐÚNG ĐẮN 正, mặc kệ THỊ phi","ZE","",0],["整","CHỈNH","điều chỉnh, chỉnh hình","Vừa thúc vừa đánh khẽ chính xác để chỉnh","SEI","totono(eru), totono(u)",0],["晴","TÌNH","trong xanh","Mặt trời trong xanh là tạnh","SEI","ha(reru), ha (rasu)",0],["牲","SINH","hi sinh","con TRÂU được SINH ra là để HY SINH làm thức ăn","SEI","",0],["盛","THỊNH","thịnh vượng, hưng thịnh","Thành công nằm trên đĩa thì là thịnh vượng","SEI, JOO","mo(ru), saka (ru), saka(n)",0],["盛","THỊNH","thịnh vượng, hưng thịnh","Sóc ĐĨA Thành công thì Thịnh vượng","SEI, JOO","mo(ru), saka (ru), saka(n)",0],["聖","THÁNH","thánh ca","(王) (耳) (口) VUA mà vừa biết lắng NGHE vừa NÓI được điều hay lẽ phải quả là bậc THÁNH (聖) nhân.","SEI","",0],["誠","THÀNH","thành thực","lời Nói (言) Thành Thực(誠) thì sẽ Thành công(成)","SEI","makoto",0],["誓","THỆ","tuyên thệ","Tay cầm đao nói lời tuyên THỆ","SEI","chika(u)",0],["請","THỈNH","thỉnh cầu, thỉnh nguyện","muốn thỉnh cầu thì Lời nói phải Thanh thoát","SEI, SHIN","ko(u), u(keru)",0],["逝","THỆ","chết, qua đời","Tay ( 扌) cầm Đao (斤) tuyên Thệ . thề chết k chạy","SEI","yu(ku)",0],["醒","TỈNH","Tỉnh, tỉnh cơn say.","Uống rượu ngắm sao tỉnh sự đời","","",0],["惜","TÍCH","tiếc","Trái tim (心）TIẾC nhớ chuyện ngày xưa (昔) bên nhau.","SEKI","o(shii), o (shimu)",0],["戚","THÍCH","yêu thích, lo lắng","THÍCH Tiểu hoà Thượng, Qua Núi thăm người thân","","",0],["拙","CHUYẾT","hậu đậu, kém","Cầm tay chuyết (chuốt) mãi không xuất thì vụng về","SETSU","",0],["摂","NHIẾP","nhiếp chính, nhiếp thủ","Tay vén tai nhiếp ảnh gia lên thấy tiếp 4 đường","SETSU","",0],["節","TIẾT","tiết mục","Dùng tre(竹) tức (即) là tiết (節）kiệm","SETSU, SECHI","fushi",0],["宣","TUYÊN","tuyên bố, tuyên cáo","Tuyên bố “ tao có 1001 ngôi nhà”","SEN","",0],["尖","TIÊM","nhọn","Kim TIÊM thì đầu NHỎ đuôi TO nên rất sắc NHỌN. Chọc cái biết ngay","","",0],["扇","PHIẾN","quạt","Ngày xưa quạt làm bằng lông chim gợi hình ảnh ngồi trước cửa vẩy vẩy cho mát","SEN","oogi",0],["栓","XUYÊN","nút bần","Thời xưa nút làm hoàn toàn bằng gỗ","SEN","",0],["染","NHIỄM","ô nhiễm","9 cái cây bị nhiễm độc bởi nước bẩn","SEN","so(meru), so (maru), shi (miru), shi(mi)",0],["潜","TIỀM","tiềm ẩn, tiềm thức","2 ông chồng đứng cùng nhau dưới nước Cả ngày Tiềm ẩn nhiều nguy cơ","SEN","hiso(mu), mogu(ru)",0],["煽","PHIẾN","quạt lửa bùng lên","QUẠT (cái cánh to như cái cửa (hình dạng)) ba tiêu của Thiết PHIẾN công chúa thổi bùng (tắt) HOẢ diệm sơn","","",0],["繊","TIÊM","thanh mảnh","Muốn TIÊM được em Mịch THANH MẢNH thì phải vượt qua 10 thằng đang xếp hàng","SEN","",0],["羨","TIỆN, TIỂN","tham muốn","美しい「MĨ」。Thiếu Dương là đẹp nét đẹp, thiếu vẻ đẹp......=> muốn có, ghen tỵ","","",0],["薦","TIẾN","tiến cử","GIỚI THIỆU loại Gà Tây TIẾN hoá chỉ ăn Cỏ nuôi trong nhà","SEN","susu(meru)",0],["践","TIỄN","thực tiễn","TIỄN chân anh đi đánh Dặc","SEN","",0],["銭","TIỀN","tiền bạc","Vì kim tiền mà TÀN残 sát nhau","SEN","zeni",0],["鮮","TIÊN","sáng, tươi, tiên minh (tươi đẹp), tân tiên","cá và dê lúc nào cũng phải ăn tươi mới ngon","SEN","aza(yaka)",0],["善","THIỆN","thiện ác, từ thiện","Con dê 2 đầu miệng biết nói làm việc THIỆN","ZEN","yo(i)",0],["繕","THIỆN","sửa chữa, chỉnh thiện","cùng con Dê đi làm việc THIỆN 善 là dùng CHỈ khâu, sửa chữa quần áo từ thiện","ZEN","tsukuro(u)",0],["措","THỐ","đặt, để","Dùng tay vứt những thứ cũ ngày xưa","SO","",0],["狙","THƯ","chuột, rình trộm","Em THƯ NHẮM vào ngôi nhà 3 tầng có con chó đẹp kia","","",0],["疎","SƠ","không thân","Chỉ bó buộc dừng lại ở mức sơ sài","SO","uto(i), uto(mu)",0],["疎","SƠ","không thân","lớn rồi phải biết dừng lại mua bó hoa tặng người yêu nhân ngày lễ đi, sơ sài sao được","SO","uto(i), uto(mu)",0],["租","TÔ","tô thuế","cây LÚA cao ngang bằng cái CẦU THANG thì phải đóng TÔ THUẾ","SO","",0],["粗","THÔ","thô ráp","Mắt nhìn ra hạt gạo thô chưa xay kĩ","SO","ara(i)",0],["粗","THÔ","thô ráp","THẢ且 bao GẠO một cách THÔ BẠO","SO","ara(i)",0],["蘇","TÔ」","cây tía tô","Ăn cá với rau tía tô","","",0],["蘇","TÔ","cây tía tô","con CA ăn vào một TÔ hạt GẠO và CỎ thần thì sống lại","","",0],["訴","TỐ","tố cáo, tố tụng","Ngôn từ đao bua nhật định là tố tụng","SO","utta(eru)",0],["阻","TRỞ","cản trở, trở ngại","1 con mắt bị cản trở bởi bức tường","SO","haba(mu)",0],["僧","TẰNG","tăng lữ","曽：Tằng:Ngày nào cũng làm Ruộng mà Cỏ vẫn mọc lên Tằng Tằng 層: Tằng ở nhà nhiều tầng 憎：Tằng giận tim dựng đứng lên 贈：Tằng được tặng bảo bối 増：Tằng mua thêm đất 僧：Tằng tăng nhân thành nhà sư","SOO","",0],["創","SÁNG","sáng tạo","Dùng DAO リ SÁNG TẠO ra nhiều món ăn TỐT食 để ăn vào MỒM 口","SOO","",0],["創","SANG","sáng tạo","ĐAO kiếm là SÁNG tạo gây ra THƯƠNG倉 tích","SOO","",0],["倉","THƯƠNG","nhà kho","người人 cửa戸 khẩu口 thương倉 hay tới lui thường là gia","SOO","kura",0],["喪","TANG, TÁNG","đám tang","(10) người đeo (kính) đen mặc (y) phục dự đám tang","SOO","mo",0],["奏","TẤU","diễn tấu","Ba người lên Thiên đình dâng TẤU","SOO","kana(deru)",0],["爽","SẢNG","Sáng, trời sắp sáng","người đàn ông dang tay sảng khoái vì biết mình sắp được tăng lương 4 lần (x4)","","",0],["掻","TAO","Gãi; cào; toát mồ hôi.","Tay gãi ngữa do côn trùng tác động","","",0],["槽","TÀO","cái máng","Thời xưa bể nước làm bằng gỗ sau 1 ngày đục đẽo ra được bể chửa 6 ngăn","SOO","",0],["漕","TÀO","chèo thuyền","Thuyền(漕) 氵) Một(ー) KHÚC(曲) Ngày(日) vừa Chèo trên Nước( vừa sáng tác ca mỗi (tào khê hát trên sống)","","",0],["葬","TÁNG","an táng","Trong lễ ăn táng đặt hoa và chắp tay cầu nguyện cho ng đã chết","SOO","hoomu(ru)",0],["藻","TẢO","tảo biển","Tảo là sản PHẨM kết hợp của cây CỎ dưới NƯỚC","SOO","mo",0],["遭","TAO","tao ngộ","Mỗi ngày trên đường lại gặp 1 khúc nhạc","SOO","a(u)",0],["霜","SƯƠNG","sương mù","những hạt mưa rới xuống cái cây nhìn tương tự như những hạt sương","SOO","shimo",0],["騒","TÀO","tao động","Con ngựa của TÀO Tháo Lại kêu INH ỎI khi bị Muỗi đốt","SOO","sawa(gu)",0],["促","XÚC","xúc tiến","Có đủ người thì Xúc tiến thôi!","SOKU","unaga(su)",0],["即","TỨC","tức thì, lập tức, tức là","bị con Dao Cấn, con dao KHÔNG TỐT艮 CẤN艮 vào đít nên rất là Tức…, ngay lập TỨC nhảy dựng lên","SOKU","",0],["捉","TRÓC","bắt","Bắt thì còng tay chân lại mới ko chạy đc","","",0],["属","THUỘC","phụ thuộc","Côn trùng hay bao Quanh Xác chết vì nó sống phụ THUỘC","ZOKU","",0],["揃","TIÊN","hoàn tất, sắp xếp","Dùng tay xếp trước giống với sau","","",0],["妥","THỎA","thỏa hiệp","Con gái chỉ cần 3 ngón tay thôi là THOẢ HIỆP rồi","DA","",0],["惰","ĐÃI NỌA","lười biếng","tim nguyệt nằm bên trái nên NỌA là người lười biếng","DA","",0],["楕","THOẢ","hình elip","trồng cái CÂY phía bên TRÁI thì chị NGUYỆT mới Thoả ( đã ) lòng","","",0],["耐","NẠI","nhẫn nại","4 người xếp hàng tuy thốn nhưng vẫn nhãn nại","TAI","ta(eru)",0],["怠","ĐÃI","lười biếng","Con tim nặng như đài thì quá mệt mọi chậm chạp","TAI","okota(ru), nama(keru)",0],["態","THÁI","trạng thái, hình thái, thái độ","cười hi hi được 4 em nguyệt, nên thấy thật thư thái trong tâm can","TAI","",0],["戴","ĐÁI","đãi ngộ, tôn kính","Sau chiến TRANH nhận ĐÃI ngộ có RUỘNG đất combo thêm 2 miếng ĐẤT","","",0],["滞","TRỆ","đình trệ","Vành đai ngập trìm trong nước, khiến cuộc sống bị đình Trệ","TAI","todokoo(ru)",0],["袋","ĐẠI","cái túi to","Y phục thời đại này nhìn cứ như cái túi","","",0],["鷹","ƯNG","chim ưng","NGƯỜI 人 NGỒI DƯỚI NHÀ 广 THẤY CON CHIM 隹 GIỐNG CON ĐÀ ĐIỂU 鳥 NHƯNG THẬT 鷹 RA NÓ LÀ CHIM ƯNG","","",0],["卓","TRÁC","trác việt","Dậy sớm kê Bàn xem bói","TAKU","",0],["拓","THÁC","khai thác","Dùng tay khai thác đá","TAKU","",0],["沢","TRẠCH","đầm lầy","cá TRẠCH sống trong đầm lầy dài cả THƯỚC","TAKU","sawa",0],["濁","TRỌC","đục","MẮT nhìn thấy Nước mà bị Bao bọc bởi Côn TRÙNG thì sẽ bị vẫn Đục","DAKU","nigo(ru), nigo (su)",0],["諾","NẶC NGHE LỜI","chấp thuận","Người trẻ thì NÓI thì phải nghe lời","DAKU","",0],["諾","NẶC","chấp thuận","NÓI ra lời nhu NHƯỢC như vậy mà nằng NẶC bảo người ta ĐỒNG Ý","DAKU","",0],["叩","KHẤU","ấn, đập","OP là khấu mà EP là ấn","","",0],["奪","ĐOẠT","chiếm đoạt","Lúc Chiếm đoạt đc con chim lớn cảm giác hơi thốn","DATSU","uba(u)",0],["嘆","THÁN","ca thán, cảm thán","Ca thán vì kanji quá khó","TAN","nage(ku), nage (kawashii)",0],["探","THAM","do thám, thám hiểm","Tìm kiếm tay chân treo trên cây","TAN","sagu(ru), saga (su)",0],["旦","ĐÁN","sớm, sáng sớm","Ngày mùng 1 tết nguyên đán","","",0],["淡","ĐẠM","đạm bạc","Đang bốc cháy mà vảy nước vào thì điềm đạm khỏi lo","TAN","awa(i)",0],["端","ĐOAN","đầu đoạn","đứng dưới núi nhìn qua rào chắn rất cực đoan","TAN","hashi, ha, hata",0],["耽","ĐAM","buông thả","TAI đang CHÌM đắm","","",0],["鍛","ĐOÁN","luyện","tôi ĐOÁN là muốn RÈN ra 1 sợi dây VÀNG thì phải qua nhiều công ĐOẠN.","TAN","kita(eru)",0],["壇","ĐÀN","diễn đàn","ở Chỗ đất bằng đội mũ lập đàn luân hồi 1 ngày","DAN, TAN","",0],["弾","ĐÀN","đánh đàn; viên đạn","đơn giản hơn việc dùng cung chính là dùng đạn","DAN","hi(ku), hazu (mu), tama",0],["値","TRỊ","giá trị","Con NGƯỜI mà chính TRỰC, ngay thẳng là người có giá TRỊ","CHI","ne, atai",0],["弛","THỈ","buông dây cung","Săn bắn được con lợn rừng thì đặt cung xuống đất,thả lỏng tinh thần mà ngơi nghỉ được rồi","","",0],["恥","SỈ","sỉ nhục","khi NGHE 耳 những lời SỈ 恥 nhục đó. trong TÂM 心 tôi cảm thấy rất là XẤU HỔ...","CHI","ha(jiru), haji, ha (jirau), ha (zukashii)",0],["痴","SI","ngu si","Người tri thức lúc bị bệnh thì dễ si đần mất trí","CHI","",0],["稚","TRĨ","ấu trĩ","(隹) (稚) (禾) con CHIM TRĨ đang ăn LÚA NON","CHI","",0],["致","TRÍ","trí mạng","Ngồi xuống đất vỗ đùi nhất trí","CHI","ita(su)",0],["馳","TRÌ","rong ruổi","Con NGỰA kiên TRÌ rong ruổi khắp nơi KHÁC nhau","","",0],["蓄","SÚC:","lưu trữ","Súc畜 Tích trữ cỏ cho gia 畜 đen玄 súc(gia súc) :Những đốm ngoài ĐỒNG là gia SÚC","CHIKU","takuwa(eru)",0],["秩","TRẬT","trật tự","Mất đi hoà khí sẽ ko giữ được trật tự","CHITSU","",0],["窒","TRẤT","ngạt","Phòng kín không có lỗ thì bị nghẹt thở","CHITSU","",0],["忠","TRUNG","trung thành, trung thực","sự TRUNG thực xuất phát từ GIỮA trái TIM","CHUU","",0],["抽","TRỪU","trừu tượng","Tự do là thứ rất trìu tượng, không thể nắm bắt bằng tay","CHUU","",0],["衷","TRUNG","ở giữa, chiết trung","người mặc áo quan luôn TRung thành, hỏi 10 lần cũng không khai","CHUU","",0],["凋","ĐIÊU","điêu tàn","xung quanh toàn băng giá khung cảnh rất điêu tàn","","",0],["張","TRƯƠNG","chủ trương, khai trương","Cung muốn bắn dài thì phải kéo căng ra","CHOO","ha(ru)",0],["彫","ĐIÊU","điêu khắc","Cho cả Tuần mà ĐIÊU khắc được có Mái tóc 3 đường","CHOO","ho(ru)",0],["徴","TRƯNG","đặc trưng, tượng trưng","Đặc TRƯNG của vua là đội vương miệng giống quả NÚI, hai bên quan võ cầm XÍCH, quan văn cầm PHỘC","CHOO","",0],["懲","TRỪNG","trừng phạt","VUA đích thân ĐI xuống NÚI, dùng tay ĐANH đập kẻ vô lương TÂM","CHOO","ko(riru), ko (rasu), ko (rashimeru)",0],["懲","TRỪNG","trừng phạt","bị nhà Vua lôi lên Núi để Trừng phạt, Xích lại, Đánh đập dã man, để TRÁI TIM kẻ phạm tội phải hối hận","CHOO","ko(riru), ko (rasu), ko (rashimeru)",0],["挑","KHIÊU","khiêu vũ, khiêu chiến","tay cam 1 trieu兆 di khieu chien. Khiêu khích là dùng tay và múa may nhặng兆 lên để kích động đối phương .","CHOO","ido(mu)",0],["眺","THIẾU","nhìn","Ông trời có TRIỆU (兆) con MẮT (目) nên TẦM nhìn (眺) không THIẾU sót một nơi nào.","CHOO","naga(meru)",0],["聴","THÍNH","thính giả","Tai muốn nghe thính phải tập trung bằng cả trái tim và 10 con mắt","CHOO","ki(ku)",0],["跳","KHIÊU","khiêu vũ","Hàng TRIỆU NGƯỜI từ khắp BỐN PHƯƠNG đều nhấc CHÂN KHIÊU vũ trong lễ hội","CHOO","ha(neru), to (bu)",0],["頂","ĐỈNH","thiên đỉnh, đỉnh đầu","ĐỈNH cao của giấy là làm đinh","CHOO","itada(ku), itadaki",0],["捗","DUỆ","tiến bộ","Các hậu DUỆ học Bộ Thủ TIẾN BỘ theo từng BƯỚC歩","","",0],["賃","NHẪM","tiền thuê","Trách NHIỆM 任 thì không thể thuê 賃 được bằng TIỀN 貝","CHIN","",0],["鎮","TRẤN","trấn áp, trấn tĩnh","trấn áp người chân chính bằng tiền","CHIN","shizu(meru), shizu(maru)",0],["陳","TRẦN","trần thuật","Nhà TRẦN tuyên bố lập nước ở sườn ĐỒI phía ĐÔNG","CHIN","",0],["津","TÂN","bờ biển","Cầm Bút vẽ con SÓNG thần trên Bến TÂN cương","SHIN","tsu",0],["槌","CHÙY","cái chùy","Mang chùy đi TRUY lùng cái CÂY","","",0],["掴","QUẶC","nắm lấy","Dùng THỦ đoạn để NẮM lấy tổ QUỐC không phải rất kì QUẶC sao","","",0],["潰","HỘI","nghiền nát","(THỦY 氵)đã nhập vào( HỘI 潰)của( QUÝ 貴)để NGHIỀN NÁT mấy đứa láo cá..","","",0],["堤","ĐÊ","đê điều","con ĐÊ cố ĐIỊNH BỜ đất ngày qua NGÀY","TEI","tsutsumi",0],["抵","ĐỂ","đề kháng","Dùng tay thấp Để chống cự","TEI","",0],["提","ĐỀ","cung cấp, đề cung","Chạy 1 ngày để đánh con Đề bạch thủ!","TEI","sa(geru)",0],["提","ĐÊ, ĐỀ","cung cấp, đề cung","mỗi ngày đều chạy đi đánh(bằng tay) con đề","TEI","sa(geru)",0],["締","HỘ ĐẾ","buộc","糸 立 冖 巾 Lấy sợi dây buộcr người đang ĐỨNG quàng KHĂN trên cổ và đội mũ bịt đầu","TEI","shi(maru), shi (meru)",0],["訂","ĐÍNH","đính chính","ôi ĐÍNH chính lại những lời tôi vừa phát NGÔN chắc như ĐINH đóng cột","TEI","",0],["諦","ĐẾ, ĐỀ","Xét kỹ, rõ","vua帝 nói言 ông rằng sẽ từ bỏ chức vua","","",0],["摘","TRÍCH","hái, trích yếu","Tay nắm chặt bình rượu cũ nên bị chỉ trích","TEKI","tsu(mu)",0],["摘","TRÍCH","hái, trích yếu","Lấy Tay TRÍCH vào mông kẻ đứng trên hộp đựng đồ cũ","TEKI","tsu(mu)",0],["摘","TRÍCH","hái, trích yếu","Tự TAY TRÍCH đi những quan niệm CŨ bao bọc trong tâm trí để LẬP ra cái mới","TEKI","tsu(mu)",0],["笛","ĐỊCH","ống sáo","cây tre đc thổi tự do gọi là sáo","TEKI","fue",0],["溺","NỊCH","chết đuối","YẾU mà còn xuống NƯỚC thì chết đuối là chắc.","","",0],["哲","TRIẾT","triết học","Chiết đc lời nói từ miệng ra thì là hiền triết","TETSU","",0],["徹","TRIỆT","triệt để","Đi Giáo Dục là phải TRIỆT để","TETSU","",0],["徹","TRIỆT","triệt để","(彳) (育) (攵) luôn ĐI bên cạnh để giáo DỤC và phải ĐÁNH nó một các Triệt để","TETSU","",0],["典","ĐIỂN","cổ điển, điển tích","tám ca khúc kinh điển","TEN","",0],["展","TRIỂN","triển khai, phát triển, triển lãm","Triển lãm Y phụcÁC CHẾT bọc trong CỎ","TEN","",0],["添","THIÊM","thêm vào","Đổ thêm dầu vô lửa, đốt cháy cả bầu trời","TEN","so(eru), so(u)",0],["纏","TRIỀN","triền miên, quấn quanh","Giấy tờ Đất đai nhà lý để trong mái nhà và quấn lại bằng sợi chỉ để lưu giữ TRiỀN miên","","",0],["殿","ĐIỆN","cung điện","Cùng nhau cầm vũ khí tấn công vào cung điện cướp xác ướp.","DEN, TEN","tono, dono",0],["妬","ĐỐ","Ghen","Phụ nữ đố kị thường ném đá nhau","","",0],["賭","ĐỒ","cá cược, cờ bạc","Học giả cầm tiền đi cá độ","","",0],["奴","NÔ","nô lệ","người phụ nữ đứng khép 2 chân lại là nô tì","DO","",0],["怒","NỘ","thịnh nộ","người con gái chân vắt chéo lên là biết con tim đang giận giữ","DO","ika(ru), oko(ru)",0],["悼","ĐIỆU","truy điệu","con TIM truy ĐIỆU thầy BÓI ra đi quá SỚM","TOO","ita(mu)",0],["搭","ĐÁP","chất lên xe","Tay cầm hoa ĐÁP lên lóc nhà","TOO","",0],["盗","ĐẠO","ăn trộm, đạo chích","Lấy TIẾP một cái ĐĨA để làm đạo tặc","TOO","nusu(mu)",0],["統","THỐNG","thống nhất, tổng thống, thống trị","Sợi Dây truyền THỐNG mang theo sự Sung túc","TOO","su(beru)",0],["到","ĐÁO","đến","Muốn đến đích ý chí至 phải sắc như dao","TOO","",0],["蕩","ĐÃNG","phóng túng","Phóng túng cho bản thân hưởng thụ tắm trong bồn hoa 艹 và nước nóng 湯","","",0],["討","THẢO","thảo phạt, thảo luận, kiểm thảo","Lời nói thảo luận gì mà nghe rất thốn","TOO","u(tsu)",0],["踏","ĐẠP","dẫm lên","Chân đạp lên nước trải qua 1 ngày","TOO","fu(mu), fu (maeru)",0],["逃","ĐÀO","đào tẩu","Ba chân bốn cẳng bỏ chạy trên con đường","TOO","ni(geru), ni (gasu), noga (su), noga (reru)",0],["透","THẤU","thẩm thấu","13 cái cây chắn dọc đường nhưng vẫn xuyên thấu qua được","TOO","su(ku), su (kasu), su (keru)",0],["透","THẤU","thẩm thấu","Tú秀 người ưu là có thể nhìn Thấu được con đường mình đi","TOO","su(ku), su (kasu), su (keru)",0],["陶","ĐÀO","đồ sứ","Sau BỜ BAO làm CAN gốm","TOO","",0],["騰","ĐẰNG","tăng cao","2 người cưỡi chim bay lên cung trăng","TOO","",0],["闘","ĐẤU","đấu tranh, chiến đấu","Thiếu THỐN mua Đậu ở Cổng chùa về ăn để ĐẤU tranh với cái đói. Mà ăn xong cứ thây thốn thốn","TOO","tataka(u)",0],["憧","SUNG, TRÁNG","khao khátm khát vọng","TÂM của nhi ĐỒNG luôn mong ước cuộc sống luôn SUNG túc.","","",0],["洞","ĐỘNG","hang động","trong hang động, mực nước là như nhau ở mọi điểm","DOO","hora",0],["胴","ĐỖNG","thân hình","Cơ thể em nguyệt làm bằng đồng","DOO","",0],["徳","ĐỨC","đạo đức","Người nhân đức thì nhìn đường bằng cả trái tim và 10 con mắt ( nhớ cách thầy dạy chim chích mà đậu cành tre, thập trên tứ dưới nhất đè chữ tâm “ kongtuan ss”)","TOKU","",0],["督","ĐỐC","giám đốc, đôn đốc","THÚC 叔 (bác) dùng MẮT nhìn để ĐỐC THÚC tôi làm bài. Không làm là LẠI tạt cho tôi vài cái","TOKU","",0],["突","ĐOỘT","đột phá, đột nhiên","Đột nhiên có CÁI LỖ 穴 to do CHÓ 犬 đào","TOTSU","tsu(ku)",0],["屯","TRUÂN","đồn trú","đường đi qua 7 núi rất gian truân","TON","",0],["頓","ĐỐN","Cúi xuống sát đất. Đứng","ngược屯 cho vào Đồn để chỉnh ĐỐN lại cái đầu ngang","","",0],["呑","THÔN","nuốt","Ngắm nhìn khuôn miệng đáng yêu đang nuốt đồ ăn","","",0],["謎","MÊ","câu đố","khi mê nói sảng hạt gạo đi lạc ngoài đường","","",0],["馴","TUẦN","quen","Con ngựa quen với việc đi Tuần ven sông","","",0],["縄","THẰNG","sợi dây","THẰNG bờm lấy Chỉ làm dây thừng đo 2 mẫu Ruộng","JOO","nawa",0],["匂","MÙI","mùi","CÁI THÌA để trong BAO lâu ngày có MÙI.","","",0],["賑","CHẨN","giàu có","tuổi Thìn năm nay được Chẩn đoán là sẽ có tiền, giàu có","","",0],["賑","CHẨN","giàu có","Nơi nào có tiền vung vẩy thì nơi đó sẽ náo nhiệt","","",0],["如","NHƯ","như thế","phụ NỮ có MIỆNG NHƯ nhau","JO, NYO","",0],["尿","NIỆU","niệu đạo","Sợ ma đái cả ra quần","NYOO","",0],["濡","NHU","Thấm ướt. Chậm trễ (đợi lâu). Tập quen.","Xếp hàng dứoi mưa ướt đẫm nước toé tung","","",0],["捻","NIỆM","Nắn, vẽ, xoắn","Kỉ niệm nắm trong tay Vặn xoay như con vít","","",0],["濃","NÙNG","nồng độ","KHÚC(曲） THẦN（辰） (氵)thật nhạc của các vị NƯỚC là NỒNG nàn","NOO","ko(i)",0],["納","NẠP","nộp","muốn xem thánh CHỈ có NỘI dung là gì thì phải NẠP tiền","NOO, NAQ, NA, NAN, TOO","osa(meru), osa (maru)",0],["蚤","TẢO","bọ chét","con côn TRÙNG cứ đi đi LẠI LẠI 2 lần ở trên người","","",0],["把","BẢ","cầm","Ba巴 Tay đang CẦM BẢ chó","HA","",0],["派","PHÁI","trường phái","Chị Thuỷ dùng long Trảo thủ thì thuộc môn Phái nào","HA","",0],["婆","BÀ","bà lão","Phụ NỮ trai qua nhiều phong BA rồi một ngày sẽ trở thành BÀ cụ","BA","",0],["俳","BÀI","diễn viên","NGƯỜIイ PHI非 thường đã được an BÀI 俳làm diễn viên","HAI","",0],["背","BỐI","bối cảnh","chị Nguyệt quay lưng vào nhau","HAI","se, sei, somu (ku), somu (keru)",0],["背","BỐI","bối cảnh","Chị Nguyệt phản bội anh Bắc, quay lưng vào ảnh","HAI","se, sei, somu (ku), somu (keru)",0],["肺","PHẾ","phổi","Chị Nguyệt nhà ở thành thị hút nhiều thuốc lá quá bị bệnh phổi (PhẾ)","HAI","",0],["輩","BỐI","tiền bối, hậu hối","tiền BỐI thường ngồi chiếc XE PHI thường","HAI","",0],["培","BỒI","bồi đắp","bồi đất lên gấp bội","BAI","tsuchika(u)",0],["梅","MAI","cây mơ","loài CÂY có vào MỖI dịp tết là cây MAI","BAI","ume",0],["賠","BỒI","bồi thường","Dùng tiền bồi thường vì miệng lỡ nói ở vị trí ko phù hợp","BAI","",0],["這","GIÁ/NGHIỆ N","ấy, không rõ ràng, lúng túng","Trước khi tập nới thì nên tập bò…","","",0],["伯","BÁ","thúc bá","Người bạc trắng là bác","HAKU","",0],["剥","BÁC","Bóc, gọt. Lột. Vận xấu","EM THỦY cầm DAO gọt vỏ","","",0],["博","BÁC","uyên bác","BÁC học đó có thể dùng Thốn để đo 10 十 cái ruộng 田","HAKU, BAKU","",0],["拍","PHÁCH","vỗ tay","TAY vỗ BẠCH BẠCH cũng ra nhịp PHÁCH","HAKU, HYOO","",0],["迫","BÁCH","áp bách, bức bách","Mang áo màu trắng chạy (cấp bách trên đường)","HAKU","sema(ru)",0],["迫","BÁCH","áp bách, bức bách","Đường dẫn màu trắng thì có cảm giác bức bách","HAKU","sema(ru)",0],["曝","BỘC","phơi nhiễm","NGÀY NGÀY日 2 ông chồng (cid:0) ngâm mình dưới nước 水 onsen để BỘC bạch tâm sự, chẳng may PHƠI NHIỄM phóng xạ từ trong onsen luôn","","",0],["縛","PHƯỢC","Trói buộc. Bó buộc","Chỉ Chuyên dùng để BUỘC","BAKU","shiba(ru)",0],["莫","MẠC","tuyệt không, to lớn","Cây CỎ mà gặp phải Nắng TO giữa Ban NGÀY trên sa MẠC thì kiểu j cũng TÀN","","",0],["罰","PHẠT","trừng phạt","Nhìn thấy chuyện ĐAO KIẾM bất bình mà không Lên TIẾNG NÓI ra thì sẽ bị Hình PHẠT Báo ứng","BATSU, BACHI","",0],["抜","BẠT","rút ra","lấy tay cho thằng bạn友 mấy cái bạt tai","BATSU","nu(ku), nu (keru), nu (kasu), nu (karu)",0],["鳩","CƯU","con tu hú","con chim bồ câu thể hiện tình yêu vĩnh cửu nên thường được treo trong đám cướ","","",0],["伴","BẠN","đi cùng","1 Nửa của bản thân chính là người BẠN đời","HAN, BAN","tomona(u)",0],["氾","PHIẾM","giàn giụa","Thuỷ tiết ra nước một cách tràn lan","","",0],["繁","PHỒN","phồn vinh","Mỗi ngày cần mẫn se chỉ, gia đình trở nên phồn thịnh","HAN","",0],["範","PHẠM","phạm vi, mô phạm","Ở rừng TRÚC Xe chỉ được chạy trong PHẠM VI cho phép","HAN","",0],["煩","PHIỀN","phiền muộn","Đầu buồn phiền như đang rực lửa, phiền vì TIỀN bị CHÁY","HAN, BON","wazura(u), wazura(wasu)",0],["煩","PHIỀN","phiền muộn","Đầu buồn phiền như đang rực lửa. Đầu mà bốc hỏa không bình tĩnh thì dễ gây ra phiền toái","HAN, BON","wazura(u), wazura(wasu)",0],["盤","BÀN","cái khay","Đặt thuyền kẻ thù lên bàn đĩa","BAN","",0],["卑","TI","hèn kém, ti tiện","Vì 4 cái ruộng mà ti hèn bần tiện","HI","iya(shii), iya (shimu), iya (shimeru)",0],["否","PHỦ","phủ định, phủ quyết","Phủ nhận lời nói từ miệng","HI","ina",0],["庇","TÍ","Che chở","Ngôi nhà được so sánh như vị thần che chở cho con người trước bão giông","","",0],["扉","PHI","cái cửa","非 扉 Người PHI ( ) thường mở CÁNH CỬA (","HI","tobira",0],["批","PHÊ","phê bình, phê phán","Tay tác động vào sự so sánh để phê chuẩn","HI","",0],["披","PHI","mở ra","lấy tay(thủ) lột da(bì) để lộ ra","HI","",0],["斐","PHỈ","văn vẻ","tụi thổ Phỉ là tụi không(Phi) có Văn hoá, văn vẻ","","",0],["肥","PHÌ","phì nhiêu","Chị nguyệt béo phì màu 色 mỡ. LIÊU」","HI","ko(eru), koe, ko (yasu), ko (yashi)",0],["避","TỊ","tị nạn","trên ĐƯỜNG TỊ nạn mà CỬA miệng cứ nói lời CAY đắng thì ai cũng tránh xa","HI","sa(keru)",0],["尾","VĨ","cái đuôi","Có cái Lông VĨ đại mọc ở gần cửa hậu là cái ĐUÔI","BI","o",0],["微","VI","hiển vi, vi sinh vật","彳 山 兀 攵 Con đường lên núi còn sót lại dấu chân NHỎ sau trận đánh nhau hôm qua","BI","",0],["膝","TẤT","đầu gối","Người(人)đứng trên cây(木)ngắm trăng(月)thì đầu gối(膝)không bị dính nước(水","","",0],["肘","TRỬU","khuỷu tay","Chỗ thịt thốn nhất là khuỷu tay","","",0],["紐","NƯU","Cái quạt, cái núm. Buộc, thắt.","dùng dây糸 buộc bò 丑","","",0],["標","TIÊU :","mục tiêu, tiêu chuẩn","Dán phiếu lên cây để làm tiêu chuẩn đánh giá ( cây tốt hay k,vv) CHUẨN","HYOO","",0],["漂","PHIÊU","phiêu lưu","phiếu 票rơi tung toé lan toả khăps mặt nước","HYOO","tadayo(u)",0],["票","PHIẾU","lá phiếu, đầu phiếu","TIỂU NHỊ dưới võng đếm ngân PHIẾU","HYOO","",0],["評","BÌNH","bình luận, phê bình","Bình luận về ngôn từ bình đẳng","HYOO","",0],["描","MIÊU","miêu tả","Miêu tả ruộng hoa bằng nét vẽ tay","BYOO","ega(ku)",0],["瀕","TẦN","đến gần","cầm TỜ TIỀN頁 ĐI 歩đến gần mặt NƯỚCミ","","",0],["貧","BẦN","bần cùng","Con sò nghèo quá đội đống phân lên đầu. Tiền phân tán đi hết=> bần cùng","HIN, BIN","mazu(shii)",0],["賓","TÂN","tân khách, tiếp tân","Người có Sò nhỏ sẽ được đứng tiếp Tân (tiếp Tân là tiếp khách quý)","HIN","",0],["頻","TẦN","tần số, tần suất","Tần suất người đi bộ đếm bằng đầu","HIN","",0],["扶","PHÙ","phù hộ, phù trợ","chồng chắp tay mong phù hộ.","FU","",0],["敷","PHU, PHỦ","trải","PHU quân ĐÁNH giặc TRẢI khắp RUỘNG đồng 10 PHƯƠNG","FU","shi(ku)",0],["腐","HỦ","hủ bại","Trong nhà gắn thịt lâu ngày thì bị mục rữa","FU","kusa(ru), kusa (reru), kusa (rasu)",0],["赴","PHÓ","Chạy tới, tới chỗ đã định","Chạy走 đến nhận chức tô卜 phó","FU","omomu(ku)",0],["侮","VŨ","làm nhục, vũ nhục","Người sử dụng Vũ lực Mỗi ngày, sẽ bị mọi người Khinh Thường.","BU","anado(ru)",0],["撫","PHỦ","an ủi","(無) Lấy Tay Xoa Đầu với ý an ủi \"Không sao đâu\"","","",0],["伏","PHỤC","phục binh, phục kích","Phục kích người trộm chó","FUKU","fu(seru), fu(su)",0],["福","PHÚC","phúc, hạnh phúc, phúc lợi","Có 10 mẫu Ruộng ở Thị xã là hạnh PHÚC rồi","FUKU","",0],["覆","PHÚC","đậy","y PHỤC của người Tây Á thường PHỦ KÍN xuống tận gót chân., mặc kiểu đó hay bị ngã chổng vó, lật từ trên xuống dưới","FUKU","oo(u), kutsugae(su), kutsugae(ru)",0],["噴","PHÚN, PHUN","phun","trong sò có 10 cọng cỏ ăn không được phún phun ra.","FUN","fu(ku)",0],["墳","PHẦN","mộ phần","Khu Đất cắm 10 bông Hoa và tiền chính là PHẦN mộ.","FUN","",0],["憤","PHẪN","phẫn uất","Con tim phẩn uất vì mất tiền mua 10 bông hoa","FUN","ikidoo(ru)",0],["奮","PHẤN","hưng phấn, phấn đấu","Trên đồng (田) thấy chú chim (隹) to (大) Đột nhiên phấn (奮) khởi âu lo chẳng còn","FUN","furu(u)",0],["奮","PHẤN","hưng phấn, phấn đấu","Cảm giác phấn khích khi thấy chim lớn ngoài đồng","FUN","furu(u)",0],["紛","PHÂN","phân vân","Phân chia sợi dây thật bối rối","FUN","magi(reru), magi(rasu), magi(rawasu), magi(rawashii)",0],["雰","PHÂN","sương mù","Mưa phân ra thành sương mù","FUN","",0],["併","TINH","thôn tính","một người đứng dang hai tay hai chân lại có hai sừng thì gọi là yêu tinh","HEI","awa(seru)",0],["塀","[BIÊN","hàng rào","biên giới làm bằng đất có giếng và có thây ma","HEI","",0],["塀","BIÊN","hàng rào","Biên giới là nơi ngăn vùng đất có Con quỷ hai sừng ở cổng thây ma","HEI","",0],["幣","TỆ","tiền tệ","dùng gạo và vải để thay cho tiền tệ","HEI","",0],["柄","BÍNH","cái cán","Phần cốt cách ở của một cái cây nó nằm ở phía trong.","HEI","gara, e",0],["蔽","TẾ","che đậy","ĐÁNH đổ GẠO không chịu dọn dẹp mà lấy KHĂN và CỎ che đậy rất tinh TẾ.","","",0],["壁","BÍCH","tường, bích họa","Tường đc xây trên đất với cửa miệng đời bao cay đắng mà ra(ngàn năm bia miệng vẫn còn trơ trơ)","HEKI","kabe",0],["癖","TÍCH, PHÍCH","tật xấu","Trong giường bệnh mở mồm trước cửa nói lời cay đắng đó là thói xấu tật hư","HEKI","kuse",0],["弁","BIỆN","hùng biện, biện luận","chấp tay biện minh (hùng biện) cho hành đông cua mình (tư)","BEN","",0],["舗","PHỐ","phố xá","Đưa A PHỦ 甫 lên trạm XÁ 舍 ở trên PHỐ 舖","HO","",0],["捕","BỘ","bắt, đãi bộ","Bắt giữ kẻ phản bội tay cầm sử dụng cây thánh giá","HO","to(raeru), to (rawareru), to (ru), tsuka (maeru), tsuka (maru)",0],["慕","MỘ","ái mộ, hâm mộ","Cỏ hâm MỘ mặt trời vì mặt trời có trái tim lớn.","BO","shita(u)",0],["暮","MỘ","chiều tối","cây Cỏ ( 艹 THẢO) có nhiều ánh nắng Mặt Trời (日日 NHẬT) thì càng phát triển To (大 ĐẠI) và Sống (暮 Mộ) tốt.","BO","ku(reru), ku (rasu)",0],["呆","NGỐC","Ngây dại","Nhìn thấy Quả trên Cây thì ngây ngốc. thằng ngốc đứng ngây ra như cái cây, miệng thì há ra.","","",0],["奉","PHỤNG","phụng dưỡng, cung phụng","3 người tặng bò chặt sừng rồi để cung phụng","HOO, BU","tatematsu(ru)",0],["縫","PHÙNG」","may vá","Chỉ khâu xe dẫn đàng xa Truy hành độc bước nhất tam trùng phùng","HOO","nu(u)",0],["褒","BAO","khen ngợi","Khen ngợi người bảo保 vệ y phục trong nhà","HOO","ho(meru)",0],["飽","BÃO","bão hòa","(食） Gói（ 包 mùa BÃO, cứ ăn Cơm hộp Đóng BAO ) => chán","HOO","a(kiru), a(kasu)",0],["乏","PHẠP","nghèo, ít","Z là chữ cuối trong bảng chữ cái tiếng anh, tôi đã đến tận cùng rồi, khốn cùng.","BOO","tobo(shii)",0],["坊","PHƯỜNG","phường","Vùng đất địa phương Phương --> Phường","BOO, BOQ","",0],["妨","PHƯƠNG","phương hại","Phụ Nữ đơn PHƯƠNG CẢN TRỞ các mối quan hệ của chồng","BOO","samata(geru)",0],["房","PHÒNG","phòng ở","HỘ PHƯƠNG mở cửa PHÒNG","BOO","fusa",0],["冒","MẠO","mạo hiểm","Mắt nhìn trực tiếp mặt trời thì mạo hiểm quá","BOO","oka(su)",0],["膨","BÀNH","bành chướng","Dưới ánh trăng, trong lòng đất, hạt đậu đang mọc rễ dài ra và lan rộng bành trướng ra xung quanhv","BOO","fuku(ramu), fuku(reru)",0],["謀","MƯU","âm mưu","MƯU mẹo phải dùng NGÔN từ MỘC mạc mà NGỌT ngào!","BOO, MU","haka(ru)",0],["撲","PHÁC","đánh","Tay cầm bút PHÁC hoạ lại sự NGHiệp ĐÁNH NHAU","BOKU","",0],["朴","PHÁC","chất phác","Ông Thầy bói CHẤT PHÁC BỐC thuốc từ vỏ Cây","BOKU","",0],["没","MỘT","trầm một","Thù này dù có phải xuống Nước cũng MỘT lòng trả","BOTSU","",0],["翻","PHIÊN","phiên dịch","PHIÊN bản mới của đôi cánh nhân tạo có thể BAY PHẤP PHỚI","HON","hirugae(ru), hirugae(su)",0],["魔","MA","ma quỷ","Trong nhà có 2 con quỷ ma cây","MA","",0],["昧","MUỘI","Tối","ngày chưa đủ tuổi làm gì cũng ngu muội","","",0],["幕","MẠC","khai mạc, bế mạc","Khai mạc lễ hội Hoa mặt trời trong thành phố","MAKU, BAKU","",0],["膜","MÔ","màng mỏng","TRĂNG lên, mô CỎ biến thành màng bao phủ MẶT TRỜI LỚN","","",0],["漫","MẠN","chịu đựng","Đứng chéo chân mắt nhìn mặt trời cho vã mồ hôi thật là tản mạn nhàm chán","MAN","",0],["蔓","MẠN","cỏ mọc lan tràn","Cỏ sau khi tắm nắng 3 ngày liền thì lại mọc tràn lan như mạng nhện","","",0],["魅","MỊ","mị lực, mộng mị","Ngửi phải mùi VỊ của QUỶ sẽ bị mộng MỊ","MI","",0],["妙","DIỆU","kì diệu, diệu kế","Người phụ nữ ( 女) mà nói ít (少) thì đó là điều kì Diệu","MYOO","",0],["霧","VỤ","sương mù","Nhiệm vụ của mưa là tạo ra sương mù","MU","kiri",0],["冥","MINH","mịt mù không ánh sáng","mặt trời bị che phủ 6 ngày nên thế giới rơi vào u Minh","","",0],["姪","ĐIỆT","cháu gái","cháu gái là ng phụ nữ có chí","","",0],["滅","DIỆT","diệt vong","ngọn lửa nhỏ mà chiến đấu với dòng nước lớn thì sẽ thành diệt vong","METSU","horo(biru), horo(bosu)",0],["免","MIỄN","miễn tội","CỨ MÔNG to CHÂN dài là MIỄN hết","MEN","manuka(reru)",0],["模","MÔ","mô phỏng, mô hình","Người xưa khi Mô tả lại lúc khai sơ trái đất chỉ có cỏ cây và mặt trời lớn.","MO, BO","",0],["茂","MẬU","mọc sum suê","cỏ hình thành nên bụi rậm","MO","shige(ru)",0],["猛","MÃNH","mãnh liệt","chó 犬 con 子 liếm đĩa cháo 皿 dũng mãnh 猛 lạ thường","MOO","",0],["盲","MANH","mù","Mắt chết là mù","MOO","",0],["網","VÕNG","mạng lưới","dùng chỉ móc thành tấm lưới, cá nhảu vào trong thì chỉ có chết","MOO","ami",0],["耗","HAO","tiêu hao, hao mòn","Lỗi耒 Ông Mao phạm làm HAO tài tốn của","MOO, KOO","",0],["儲","TRỮ","Trữ, tích chứa, để dành","Niềm TIN (信) của học GIẢ (者) tích TRỮ sẽ sinh lời","","",0],["黙","MẶC","trầm mặc","Nướng chó ngoài đồng đen hắc nhưng mọi người mặc kệ im lặng","MOKU","dama(ru)",0],["餅","BÍNH","Bánh, nhào bột làm bánh","dùng nước giếng 并để làm bánh giày ăn","","",0],["紋","VĂN","hoa văn","Dùng chỉ thêu hoa Văn","MON","",0],["爺","GIA GIA","ông","bố(父) của bố(B) bị lãng tai","","",0],["厄","ÁCH","tai ách","Một người đang quỳ dưới vách núi khi gặp tai hoạ","YAKU","",0],["躍","PHI DƯỢC","nhảy lên","mấy con chim chân vừa nhảy nhót miệng vừa hót yo yo","YAKU","odo(ru)",0],["柳","LIỄU","cây liễu","Trên Cây LIỄU có quả Trứng lòng trắng","RYUU","yanagi",0],["宥","HỰU","tha thứ","dưới MAI NHÀ phải CÓ lòng khoan dung, biết tha thứ lẫn nhau","","",0],["幽","U","u tịch, u tối","2 con YÊU ma bị nhốt vào trong NÚI U ám.","YUU","",0],["悠","DU","xa xăm","Nhân Đánh bản nhạc Tâm hồn DU dương nhớ về phương XA","YUU","",0],["憂","ƯU","ưu phiền","Trăm 百 ĐÊM Ưu phiền Trái tim 心 này để lại PHÍA SAU","YUU","ure(eru), ure(i), u(i)",0],["湧","DŨNG","Nước vọt ra","DŨNG勇 Người cảm ý chí sôi hùng hục","","",0],["誘","DỤ","dụ dỗ","Dụ dỗ khuyên bảo Hoà 13 lần","YUU","saso(u)",0],["雄","HÙNG","thư hùng, anh hùng, hùng tráng","NAM(ナム） nhi có CHYM（隹） giống đực là anh HÙNG","YUU","o, osu",0],["融","DUNG","tan chảy, dung hòa, dung hợp","một cái mồm mà nói tận bốn cái tên, làm cho sâu bọ cũng tan chảy","YUU","",0],["与","DỰ","cấp dữ, tham dự","Mua 5 (quả táo) sẽ được tặng thêm 1 quả","YO","ata(eru)",0],["揚","DƯƠNG","giơ lên","Hãy Vỗ TAY tuyên DƯƠNG những người có MÓN CHIÊN ngon nhất NGÀY hôm nay!!! **Trong lĩnh vực nấu ăn, chữ DƯƠNG này có nghĩa là CHIÊN 揚げる(あげる)","YOO","a(geru), a (garu)",0],["揺","DAO","dao động","tay và móng tay đè lên 2 quả núi đôi==>dao động, rung lắc","YOO","yu(reru), yu(ru), yu(ragu), yu (rugu), yu (suru), yu (saburu), yu (suburu)",0],["揺","DAO","dao động","TAY khi NHẬN lấy CAN đựng nước uống mà trái tim rung rung xúc động, nước trong can cũng dao động luôn","YOO","yu(reru), yu(ru), yu(ragu), yu (rugu), yu (suru), yu (saburu), yu (suburu)",0],["擁","ỦNG","ủng hộ","Tay ÔM Đầu con CHIM NHỎ cho vào ỦNG để ÔM ấp nó","YOO","",0],["遥","DIÊU/DAO","Xa. Dài","缶 tôi đang trên con đường cầm cái lon đựng hoa để đi tìm lá DIÊU bông nơi XA XÔI","","",0],["養","DƯỠNG","dưỡng dục","Ăn dê thì bổ dưỡng","YOO","yashina(u)",0],["抑","ỨC","ức chế","ức chế vì dùng tay quay 2 cánh quạt","YOKU","osa(eru)",0],["嵐","BỘ","Khí núi","bão tố những cơn gió xoáy thành cột dựng cao hơn cả núi","","",0],["欄","LAN","lan can","Trồng Cây ngoài cửa để thi thoảng ra ngoài LAN can ngắm MẶT Trời mọc","RAN","",0],["濫","LẠM","tràn ra, lạm dụng","Giám監 đốc Lạm dụng chức quyền tiêu tiền như nước","RAN","",0],["覧","LÃM","triển lãm","ô thần nằm xem triển lãm","RAN","",0],["履","LÍ","đi, mặc","Phục Hồi lại LÍ lịch để đi THI","RI","ha(ku)",0],["離","LY","tách li, li khai","đành phải chia LY离 người yêu, do con chim 隹 của chàng có cái Đầu 亠 Hung凶 dữ lại to như vết chân thú 禸---> sợ quá gái chạy mất dép","RI","hana(reru), hana(su)",0],["慮","LỰ","tư lự, khảo lự","Thoáng thấy VẰN CON HỔ (đọc là HÔ) lướt qua nên rất lưỡng LỰ, tâm TƯ k biết có phải là có hổ k","RYO","",0],["寮","LIÊU","kí túc xá","Dưới MÁI nhà TO lớn hàng NGÀY có học sinh TIỂU học ở là kí túc LIÊU xá","RYOO","",0],["瞭","LIỆU","sáng sủa","Đưa Mắt xem LIỆU Tivi Nhật có To Rõ Ràng không","","",0],["糧","LƯƠNG","lương thực","Lương thực tính bằng số lượng gạo","RYOO, ROO","kate",0],["陵","LĂNG","lăng tẩm","Những VÙNG ĐẤT để thần TIÊN TRỞ VỀ nghỉ ngơi là LĂNG Tẩm","RYOO","misasagi",0],["臨","LÂM","lâm thời","LÂM thời các đại thần tạo ra sản phẩm trong tư thế nằm!","RIN","nozo(mu)",0],["隣","LÂN","lân bang, lân cận","米 タ 年 Bồ LÚA bên cạnh ta quanh năm","RIN","tona(ru), tonari",0],["隣","LÂN","lân bang, lân cận","Nhà hàng xóm Bên vách tường tối lửa tắt đèn có CƠM cho nhau NĂM này qua năm khác","RIN","tona(ru), tonari",0],["塁","LŨY","thành lũy","Thành Luỹ bao gồm ruộng đất vây quanh tứ phướng 4 hướng","RUI","",0],["励","LỆ","khích lệ","Theo lệ thì có man trong nhà kích thích sức lực","REI","hage(mu), hage(masu)",0],["鈴","LINH","cái chuông","令 chuông LỆNH làm bằng KIM loại","REI, RIN","suzu",0],["隷","LỆ","nô lệ, lệ thuộc","Nguyên là quân SỸ nhưng bị bắt về nhận chỉ THỊ cầm CHỔI quét nhà như là nô lệ","REI","",0],["霊","LINH","linh hồn","Linh hồn xếp hàng lưu lạc giữa trời mưa","REI, RYOO","tama",0],["劣","LIỆT","thua kém","Thiếu Lực bị LIỆT vào hàng YẾU KÉM","RETSU","oto(ru)",0],["烈","LIỆT","mãnh liệt, oanh liệt","列 LIỆT 灬 HỎA","RETSU","",0],["裂","LIỆT","rách","LIỆT列 kê những bộ Y phục bị RÁCH","RETSU","sa(ku), sa (keru)",0],["呂","LỮ, LÃ","Luật lữ,tiếng điệu hát","Bể tắm hai ngăn chữ nhật có nối khớp nhau, đựng nước lã","","",0],["露","LỘ","sương mù","mưa rơi ngoài đường LỘ ra tạo thành giọt sương","RO, ROO","tsuyu",0],["弄","LỘNG","Mân mê, ngắm nghía","bó tay ông vua LỘNG hành","","",0],["麓","LỘC","Chân núi.","Dẫn 2 con tuần LỘC鹿 từ trên Rừng xuống CHÂN NÚI","","",0],["歪","OAI, OA","Méo lệch","bất chính là cong méo rồi","","",0],["賄","HỐI","hối lộ","Có tiền thì nghĩ ngay đến hội lộ","WAI","makana(u)",0],["惑","HOẶC","nghi hoặc","MỒM Nói QUA loa 1 vài câu mà TÂM như Mê HOẶC","WAKU","mado(u)",0],["枠","KHUNG","cái khung","90 cái cây được dùng làm khung nhà","","waku",0],["詫","SÁ","khoe","Đến tận nhà nói lời xin lỗi để mong Sá (Xá) tội","","",0],["碗","OẢN","Cái bát nhỏ","Buổi Tối thời Tiết lạnh nên fai ở trong Nhà Ăn OẢN bằng BÁT Đá","","",0],["仄","TRẮC","nghiêng, tráo trở,, phản trắc","người đi dưới sườn núi nghiên nghiên, càng ngày càng thấy mờ nhạt","","",0],["俯","PHỦ","cúi","Muốn được làm trong PHỦ thì người đó phải biết cúi đầu","","",0],["傲","NGẠO","Kiêu căng","Người mà tới các vùng đất phương xa chỉ để đánh nhau là kẻ ngạo mạn","","",0],["冓","CẤU","Trung cấu,cơ cấu","hai ông chủ tái cấu trúc công ty","","",0],["凭","BẰNG","Tựa ghế","khi mệt ai cũng phải có trách NHIỆM tựa vào GHẾ.","","",0],["呵","A","Tiếng giúp lời","MỒM có KHẢ năng nói A A","","",0],["咎","CAO","Xấu","Các 各 ngươi hay đổ lỗi 咎cho người 人 khác là không tốt","","",0],["呟","HUYỀN","thì thầm","MIỆNG THÌ THẦM những điều HUYỀN diệu","","",0],["咄","ĐỐT","đốt lửa","Đốt đốt [咄咄] ối chao ! tiếng kinh sợ","","",0],["啜","XUYẾT","Nếm, mút.","口 又), Lần đầu gặp sẽ Hớp hồn và thu hút đối phương bởi cái và những cái bắt tay( dần tình cảm sẽ được Xuyết chặt","","",0],["喘","SUYỄN","Thở gằn","Miệng thở hỗn hển khi leo Núi, vượt rào","","",0],["嗅","KHỨU","ngửi","Khứu giác của Chó tự dùng mồm ngửi","","",0],["嗟","SA","Than thở","差 Điều khác biệt Ta có thể làm là mở miệng kêu than!","","",0],["囁","CHIẾP","Xào xạc; róc rách; thì thầm; xì xào .","1 cái mồm nói thầm chiêm chiếp vào 3 cái tai","","",0],["夬","QUÁI","quyết hẳn","ban (you ユ）la nguoi (人) hay la quai vat","","",0],["奢","XA","Xa xỉ","ĐẠI GIẢ (gia) thì sống rất XA hoa","","",0],["婉","UYỂN","Nhún thuận","uyển宛 người phụ nữ có đôi tay chuyển","","",0],["屁","THÍ","Hơi tiết xuống dưới","tỉ thí dưới cửa và bị đá rơi xuống dưới","","",0],["嵌","KHẢM","Hõm vào","Bắc thang leo lên NÚI山 hái trái CAM甘 không ngờ thang THIẾU欠 một nấc nên hụt chân MẮC KẸT嵌る luôn trên đó.","","",0],["彷","BÀNG","Bàng hoàng","bàng hoàng ko tìm thấy hướng đi","","",0],["徨","HOÀNG","Bàng hoàng","hoàng皇 định」 thượng ko có lối đi kiên","","",0],["憚","ĐẠN","Kiêng sợ","Con tim đơn giản, mà luôn có đôi mắt tránh trước tránh sau thì luôn ngại ngùng.","","",0],["拗","ẢO","bướng bỉnh","dùng TAY đánh vào mông đứa trẻ hư để dạy dỗ chúng ), mà đánh bằng LỰC mạnh rồi nó vẫn BƯỚNG BỈNH","","",0],["揉","NHU","Thuận","dùng tay扌 bóp miếng đất sét, uốn nắn cho nó MỀM 柔","","",0],["擽","NHỘT","tickle, funny","vua chúa truỵ lạc, nghe nhạc 楽 rồi đc hai tiểu yêu 幺 sờ soạn 手thấy nhột","","",0],["曖","ÁI","Yểm ái","Tình ái vào một ngày mập mờ khó hiểu","","",0],["桿","CAN","Cái gậy gỗ, cái côn","cái CÂY KHÔ hàng NGày được dùng làm cần điều khiển","","",0],["鬱","ÚC, UẤT:","Uất kết, uất tức","UẤT 鬱 vì người yêu đi lấy chồng Về vườn ôm CHAI 缶 nằm chổng mông Ở giữa hai CÂY 木 木 vi vu gió 冖 Phát hiện ngay ra cái VUNG đồng Lật lên ôi sao kinh ngạc quá Ở dưới có chum RƯỢU NẾP 鬯 sông Lại thêm RÂU TÓC 彡 ai để đó Kinh hồn bạt vía chạy cong mông","","",0],["滲","SẨM","Chảy, rỉ ra.","Nước từ ba đám mây thấm vào mái nhà rỉ ra ba giọt nước","","",0],["漱","SẤU, THẤU","Súc miệng","khi mà súc miệng nếu thiếu nước thì cảm thấy khó chịu như bị bó buộc","","",0],["狡","GIẢO","Xỏ lá, giảo quyệt, giảo hoạt","Chú CHÓ biết đi GIAO hàng giúp chủ, rất ranh ma GIẢO quyệt.","","",0],["璧","BÍCH","Ngọc bích","tảng đá trải qua nhiều cay đắng thì mơi trở thành viên ngọc hoàn hảo được","","",0],["甦","TÔ","Sống lại","uống TÔ canh này, Một一 NGÀY日 kia Người人 sẽ tái Sinh生","","",0],["甬","DŨNG","lối giữa","mama sử dụng người Dũng khí","","",0],["痺","TÝ","tê liệt","Bị BỆNH BẠCH cầu đã 4 năm. Nằm tê liệt 1 chỗ","","",0],["睨","NGHỄ","Nghé trông, liếc","Mắt ngạo NGHỄ Vừa đi vừa LƯỜM cái Cối","","",0],["碌","LỤC","hèn hạ","lục trộm được hòn đá bèn ném hòn đá xuống nước 9 lần, quả là hèn hạ","","",0],["禺","NGU","Tên núi, tên đất","trên RUỘNG có DẤU CHÂN thằng NGU nào đây","","",0],["稍","SẢO","Chút","thóc được sao rang nhỏ trong 1 tháng","","",0],["竄","CẢI THOÁN","Chạy trốn","con CHUỘT鼠 chạy trốn vào cái LỖ 穴","","",0],["綺","KHỈ","the lụa","Sợi chỉ 糸 MỊCH đẹp đến 奇 KÌ lạ","","",0],["緻","TRÍ","Tỉ mỉ, kín, kĩ","糸trên 土của ム 攵 Sợi CHỈ ĐẤT TÔI dùng để ĐÁNH giết địch nhân nên được tạo TỈ MỈ bằng cách đan từng sợi tơ nhện lấy trong rừng","","",0],["罠","MÂN","trap, snare","Người DÂN mắc VÕNG bẫy chim","","",0],["翳","Ế","Cái lọng, cái quạt lông","Thầy \"Y\" chữa được bệnh Ế cho kẻ \"Thù\" liền tỏ ra đắc ý phe phẩy quạt lông \"Vũ\"","","",0],["聿","DUẬT","Cái bút","Yoヨ キ Câu bút kỷ Duật (zô kỷ luật)","","",0],["舐","THỈ","Liếm","vừa liếm舌 vừa thủ thỉ với quả thị 氏 (bà để bà liếm chứ bà không ăn) haha...","","",0],["藪","TẨU","Chằm lớn, cái đầm","nơi đầm CỎ gặp cô GÁI vác trên vai 2 CHỒNG HÀNG cột dây lên nhau, liền đuổi theo ĐÁNH 攵 cướp hàng luôn","","",0],["訃","PHÓ","Báo tin có tang","Về chuyện cáo PHÓ (訃) , thì không nên NÓI (言) TO(卜)","","",0],["諄","TRUÂN","Chăm dạy","đứa trẻ đội mũ hễ mở miệng nói là dài dòng văn chương","","",0],["贅","CHUẾ","bám vào","ở vùng ĐẤT địa PHƯƠNG này, CHUẾ nào chạy theo đồng TIỀN sẽ bị ĐÁNH ĐẬP.","","",0],["躓","CHÍ","Vấp váp","anh CHÍ tuy CHÂN CHẤT nhưng luôn bị trở ngại vấp ngã","","",0],["銜","HÀM","Cái hàm thiết ngựa","Sợ mất, nên đã ngậm vàng (金) trên đường đi (行","","",0],["閾","QUẮC","Cái bờ cửa, ngưỡng cửa.","chỉ cần MỘT KHẨU đi QUA NGƯỠNG cửa đó là sẽ mở ra thời đại mới, thách thức những ngưỡng cũ","","",0],["頷","HẠM","Cằm","bây giờ nếu nói đúng Hàm ý trong đầu thì hãy gật đầu","","",0],["騙","PHIẾN","Lừa đảo","lừa ngựa 馬 vào chuồng 冊 đóng cửa chuồng lại 扁","","",0],["齧","NIẾT","Cắn","Dùng đao niết 3 khúc xương thành 2 phần rồi mới dùng răng gặm.","","",0],["貌","MẠO","Dáng mặt","con sâu màu trắng có 2 chân dung mao khá đẹp","","",0],["篤","ĐỐC","siêng năng, nồng hậu, mãnh liệt","(馬) (竹)là Đốc(篤) Ngựa mà ăn tre trúc ngựa của giám","TOKU","",0],["藩","PHIÊN","Bờ rào. Phên che, bảo hộ.","đến Phiên lãnh chúa tưới Nước cho Cỏ rồi","HAN","",0],["勺","CHƯỚC","合 1/10 của (hợp) (đo)","勹)quanh Chủ(ヽ) Bao( nhân và bắt CHƯỚC....","SHAKU","",0],["旬","TUẦN","10 ngày","1 TUẦN 旬 đi làm chỉ đù tiền BAO 勹 bạn bè ăn 1 ngày 日","JUN","",0],["匁","CHỈ","3.75 gram (đo)","Bao勹 nghệ乂 CHỈ nặng 3,75g","","monme",0],["坪","BÌNH","36 feet vuông","chỗ đất 土 bằng phẳng thì mới có hoà (BÌNH) 坪","","tsubo",0],["寧","NINH","an ninh","Ninh như đinh đóng cột treo võng nằm yên tâm dưới mái nhà cứ Đinh NINH là Tâm sẽ yên ổn khi nằm Võng dưới mái nhà","NEI","",0],["桜","ANH","anh đào","Người con Gái (女) tránh nắng ((cid:0)) dưới Cây (木) Anh Đào (桜).","OO","sakura",0],["窃","THIẾT","ăn trộm","kẻ trộm cắp 窃 thì bị cắt 切 đầu rồi chôn xuống HUYỆT 穴","SETSU","",0],["殴","ẨU","ẩu đả","KHU 区 vực mà có nhiều kẻ THÙ 殳 địch thì hay xảy ra ẨU đả","OO","nagu(ru)",0],["爵","TƯỚC","bá tước","Có Chức TƯỚC mà thiếu Thốn Lương tâm thì 0 khác gì người mù Mắt","SHAKU","",0],["罷","BÃI","bãi miễn","Tài năng能 mà mắt 罒 kém thì sẽ bị bãi chức","HI","",0],["排","BÀI","bài trừ","Tay扌 Phi非 ôm bụng vào bồn cầu BÀI tiết","HAI","",0],["頒","BAN","ban bố, ban hành","ban bố phân分 phát đầu頁 người","HAN","",0],["卸","TÁ","bán buôn","Dừng Trâu lại dỡ cả Tá hàng xuống mệt Tiết mồ hôi hột.","","oro(su), oroshi",0],["径","KÍNH","bán kính","BƯỚC CHÂN của thần THÁNH có đường KÍNH rất dài.","KEI","",0],["謄","ĐẰNG","bản sao","NGÔN từ TRẪM nói ra ĐẰNG ấy phải SAO CHÉP vào","TOO","",0],["傍","BÀNG","bàng quan","Người đứng ngoảnh mặt (về 1 Phuong khác) ko giúp người gặp nạn là bàng quan","BOO","katawa(ra)",0],["胎","THAI","bào thai","Chị Nguyệt có thai với anh Đài","TAI","",0],["保","BẢO","bảo trì, bảo vệ, đảm bảo","con người dùng miệng để BẢO vệ cái cây","HO","tamo(tsu)",0],["証","CHỨNG","bằng chứng, nhân chứng, chứng nhận","lời nói （言）đúng chính xác ( 正）được đưa ra làm CHỨNG","SHOO","",0],["崩","BĂNG","băng hoại","Mất 2 tháng để PHÁ núi tạo thành đường Băng","HOO","kuzu(reru), kuzu(su)",0],["朽","HỦ","bất hủ","cây này đã sống 5 năm rồi nên giờ nó bị mục nát..","KYUU","ku(chiru)",0],["陛","BỆ","bệ hạ","Bệ hạ có hàng Tỉ miếng Đất","HEI","",0],["痘","ĐẬU","bệnh đậu mùa","thằng nào mà bị bệnh đậu mùa là phải bị nhốt trong nhà, cấm ra ngoài","TOO","",0],["痢","LỊ","bệnh lị, kiết lị","Bệnh liên quan đến Lợi khuẩn là bệnh kiết LỊ","RI","",0],["秘","BÍ","bí mật, bí quyết, giấu kín","Trồng được cây LÚA tốt TẤT nhiên phải có BÍ mật, BÍ quyết","HI","hi(meru)",0],["密","MẬT","bí mật, mật độ","yếu（必）thì 宀 山 密 những thứ cơ hay được cất dấu trong nhà xây trê núi thì gọi là bí mật","MITSU","",0],["暁","HIỂU","bình minh","30 NGÀY ĐI tìm HIỂU bình minh","GYOO","akatsuki",0],["泡","BÀO","bọt","bao包 trùm mặt nước氵 như Phao bong bóng","HOO","awa",0],["歩","BỘ","bộ hành, tiến bộ","Đi 歩 một vài 少 bước nhỏ rồi dừng lại 止 ấy là đi bộ.","HO, BU, FU","aru(ku), ayu (mu)",0],["陪","BỒI","bồi thẩm đoàn","Bộ部 阝mông Bồi陪 Trưởng dịch lên trên là chức thẩm đoàn.","BAI","",0],["浜","BANH","bờ biển","Binh lính đánh Thuỷ đang tập trận ở BỜ BIỂN","HIN","hama",0],["腹","PHỤC","bụng","Người con gái hàng tháng月 đến ngày日 bị đau bụng, phải nằm mãi","FUKU","hara",0],["謡","DAO","ca dao","vừa NÓI vừa gõ MÓNG TAY lên cái LON --» sẽ ra CÂU VÈ CA DAO","YOO","utai, uta(u)",0],["鯨","KÌNH","cá voi, kình ngạc","cá魚 kinh京 kình。 ở đô là con cá CÁ魚 KINH京 KÌNH to khủng","GEI","kujira",0],["鉢","BÁT","cái bát","ở Nhật BẢN 本 cái BÁT 鉢 làm bằng Kim loại 金","HATSU, HACHI","",0],["盆","BỒN","cái bồn","分) 皿) 盆 (PHÂN những cái (ĐĨA ra CAI KHAY rồi đem ra ( BỒN ) rửa ...","BON","",0],["鐘","CHUNG","cái chuông","Trẻ con nhi đồng童 chơi chuông kim金 loại","SHOO","kane",0],["刀","ĐAO","cái đao","Đao刀 kiếm dễ gây cụt đầu đại Ka. カ","TOO","katana",0],["亭","ĐÌNH","cái đình","Người nào mà Cao (高) thì không dùng miệng ( 口) để chỉ huy mà phải dùng sức lấy Đinh đóng Đình","TEI","",0],["棚","BẰNG","cái giá","làm cái giá bằng gỗ mất 2 tháng","","tana",0],["獄","NGỤC","cai ngục, ngục tù","Địa NGỤC là lúc người ta NÓI nhau chẳng khác gì CHÓ với MÈO","GOKU","",0],["傘","TẢN","cái ô","1 người trên cao che cho 14 người (十 + 4人 )ở dưới.=> Ô Dù (傘 TÁN) của con ông cháu cha.","SAN","kasa",0],["箇","CÁ","cái, đếm vật nhỏ","古 口 竹 đồ cổ được vây quanh bởi những khớp trúc.","KA","",0],["胆","ĐẢM","can đảm","1 ngày ở trên mặt trăng - thật can đảm","TAN","",0],["翼","DỰC","cánh","Sải đôi cánh羽 lớn tung bay ngoài đồng ruộng田 2 miếng đất土","YOKU","tsubasa",0],["諭","DỤ","cảnh báo","Dùng Lời Nói THUYẾT PHỤC DỤ tên tội phạm đang cầm Dao kề cổ chị Nguyệt trong Nhà","YU","sato(su)",0],["帆","PHÀM","cánh buồm","(巾)thường (凡) vải dùng làm CÁNH BUỒM","HAN","ho",0],["更","CANH","canh tân","(ー）một (日）ngày có 10(x) canh","KOO","sara, fu(keru), fu(kasu)",0],["貴","QUÝ","cao quý","QUÝ(貴） TRAI（貝）được TRONG（中） MỘT（一） Của ngày xưa thường là NGỌC giấu cái rương.","KI","tatto(i), tooto (i), tatto(bu), tooto(bu)",0],["隆","LONG","cao quý","long隆 Vùng ĐẤT có mạch chạy qua thì SINH SỐNG phồn thịnh","RYUU","",0],["脚","CƯỚC","cẳng chân","tung một Cước vào háng em Nguyệt 月 cho ẽm khỏi khước却 từ","KYAKU, KYA","ashi",0],["忌","KỊ","cấm kị, kiêng kị","TÂM ích KỈ luôn đố KỊ","KI","i(mu), i (mawashii)",0],["釣","ĐIẾU","câu cá","cầm cần câu móc KIM LOẠI và CÁI BAO -- để đi CÂU CÁ nhưng lại câu được TIỀN THỐI nên お la lên","CHOO","tsu(ru)",0],["句","CÚ","câu cú","MIỆNG nói ra BAO lời cay CÚ","KU","",0],["拘","CÂU","câu thúc","TAY trái cầm đồ, tay phải cũng ôm BAO bọc đồ, còn MIỆNG thì liên tục giục giã CÂU thúc","KOO","",0],["桑","TANG","cây dâu","Cây dâu có lá giống bàn tay người, ở trên là hình bàn 3 bàn tay phải, dưới là thân cây","SOO","kuwa",0],["桃","ĐÀO","cây đào","Một CÂY ĐÀO đẹp có cả TRIỆU Người đến xem nhiều khía cạnh (4 hướng)","TOO","momo",0],["杉","SAM","cây sam","cây 木 trông giống tóc đuôi SAM彡 là cây liễu SAM (xưa gọi là cây tuyết tùng).","","sugi",0],["松","TÙNG","cây tùng, tùng bách","TÁM việc TƯ sẽ thành việc CÔNG, CÂY trồng nơi CÔNG CỘNG là cây TÙNG (CÂY THÔNG","SHOO","matsu",0],["抹","MẠT","chà xát","末 扌xoá 抹茶 Cuối cùng cũng phải ra tay bỏ Mattcha","MATSU","",0],["渋","SÁP","chát","Thuỷ đi mua Phấn SÁP thì phải Dừng Lại vì bị KẸT XE ở Ngã 4","JUU","shibu, shibu(i), shibu(ru)",0],["奔","BÔN","chạy, bôn tẩu","Chắp tay 10 lần xin đậu vào Đại học Bôn ba","HON","",0],["杯","BÔI","chén","Nhìn: cái Cây (木) Bất mãn (不), vì sao?=> Vì bị trồng ở trong cái Chén (杯) bé xíu.","HAI","sakazuki",0],["艦","HẠM","chiến hạm, hạm đội","舟GIÁM監 Tàu sát biển là chiến HẠM","KAN","",0],["詔","CHIẾU","chiếu chỉ, chiếu thư","Vua dùng lời nói言 Triệu召 vào thay cho Chiếu dụ.","SHOO","mikotonori",0],["征","CHINH","chinh phục, chinh phạt","Chinh phục con đường chân chính","SEI","",0],["挿","SÁP","cho vào","Tay cắm lúa (千 nhìn giống lúa) xuống ruộng","SOO","sa(su)",0],["凹","AO","chỗ lõm","Cái ao có chỗ lõm hình chữ U","OO","",0],["枢","XU","chốt cửa","Cây木 ở khu区 vực không phải trung tâm thì ko đáng 1 Xu","SUU","",0],["釈","THÍCH","chú thích","con ng này hay giải THÍCH 釈 và BIỆN 釆 luận. nên dùng dây XÍCH 尺 xích hắn lại...","SHAKU","",0],["宰","TỂ","chúa tể, tể tướng","tuy tể tướng làm việc trong nhà nhưng công việc phải ngậm đắng nuốt cay","SAI","",0],["賀","HẠ","chúc mừng","lực力 miệng口 tiền貝 Dùng sức và cái để kiếm vào mùa hạ thật đáng chúc mừng","GA","",0],["専","CHUYÊN","chuyên môn, chuyên quyền","田sẽ thốn寸 Làm chuyên môn về 10 cái ruộng hơi","SEN","moppa(ra)",0],["癒","DŨ","chữa bệnh","Trước (前) khi chữa Bệnh (疒) phải chữa lành (癒) con tim(心)","YU","",0],["症","CHỨNG","chứng bệnh, triệu chứng","Người ta dựa vào triệu chứng để tìm ra bệnh một cách chính xác.","SHOO","",0],["猿","VIÊN","con khỉ","(袁) (猿) (犭) Công viên có nuôi con khỉ (vượn) đầu chó","EN","saru",0],["豚","ĐỒN","con lợn","Nghe ĐỒN nguyệt月 béo như lợn豕","TON","buta",0],["猫","MIÊU","con mèo","Con chó (犭) xồ vào bụi Cỏ (艹) ngoài Ruộng (田)=> để bắt con Mèo (猫) hoang.","BYOO","neko",0],["蚊","VĂN","con muỗi","trung虫 văn文 Côn biết làm là con muỗi","","ka",0],["婿","TẾ","con rể","疋 女 trăng月 Chú rể chính là tên hạ nhân đã cướp mất sự trong sáng của cô gái ở tuổi tròn. おいしい","SEI","muko",0],["竜","LONG","con rồng","Đứng立 田 竜 trên ruộng tạo ra sấm set là rồng","RYUU","tatsu",0],["蚕","TẰM","con tằm","Côn trùng của trời là con tằm","SAN","kaiko",0],["襟","KHÂM","cổ áo","Cấm禁 KHÂM sai mặc Y衤 phục có CỔ ÁO","KIN","eri",0],["孤","CÔ","cô độc","Đứa bé子 CÔ đơn ngồi cắn móng瓜 tay,","KO","",0],["昆","CÔN","côn trùng","日 比 昆虫 dưới mặt trời có hàng tỉ con côn trùng","KON","",0],["姫","CƠ","công chúa","Công chúa là Nữ女 Thần臣","","hime",0],["貢","CỐNG","cống hiến","Ngày xưa các nước chư hầu phải bỏ Công 工 bỏ tiền 貝 (Thời mông muội vỏ sò từng là một loại tiền tệ) Cống nạp cho nước lớn","KOO, KU","mitsu(gu)",0],["碁","KÌ","cờ","quân cờ其 vây làm từ đá石 , shogi làm từ gỗ","GO","",0],["礎","SỞ","cơ sở","Lấy đá đặt dưới chân làm cơ SỞ nền móng vững chắc sẽ đặt đc cả cánh rừng lên trên","SO","ishizue",0],["基","CƠ","cơ sở, cơ bản","kì其 này có cơ hội mua miếng đất土","KI","moto, motoi",0],["薪","TÂN","củi,gỗ","Cỏ mới dùng làm củi","SHIN","takigi",0],["宮","CUNG","cung điện","Trong cung có 2 cái miệng lớn là miệng của vua và hoàng hậu( ăn hết của dân)","KYUU, GUU, KU","miya",0],["恭","CUNG","cung kính","tâm心 lớn大 nhau共 cùng cung thuận chung thành","KYOO","uyauya(shii)",0],["距","CỰ","cự li","Chân足 to chạy được cự巨 ly lớn","KYO","",0],["舎","XÁ","cư xá","phố XÁ là nơi có những MÁI NHÀ to to mặt ĐẤT là những con người MIỆNG luôn nói cười..","SHA","",0],["剛","CƯƠNG","cứng","cương岡 đao刂 cứng như cây","GOO","",0],["壮","TRÁNG","cường tráng","Tráng Sỹ đứng dựa Tường.","SOO","",0],["賊","TẶC","cướp, đạo tặc","Cuộc chiến của bọn phản tặc cướp 10 quan tiền貝","ZOKU","",0],["蛮","MAN","dã man, man tộc","DIỆC 亦 bọn côn TRÙNG虫 dã MAN.","BAN","",0],["簿","BỘ","danh bộ","Tre(竹) 氵) CHUYÊN(専) BỘ(簿) bút mực Nước( để ghi chép sổ sách","BO","",0],["誉","DỰ","danh dự","Lời Nói To và có Lửa thể hiện Danh DỰ của bản thân","YO","homa(re)",0],["嘱","CHÚC","dặn","Côn Trùng chết đi để lại di CHÚC属 bằng mồm口","SHOKU","",0],["酢","TẠC","dấm","Rượu Ép (F) thành Giấm","SAKU","su",0],["紡","PHƯỞNG","dệt","Sợi chỉ đan vào nhau theo các Phương khác nhau gọi là Dệt Vải.","BOO","tsumu(gu)",0],["疫","DỊCH","dịch bệnh","DỊCH BỆNH là kẻ THÙ của con người","EKI, YAKU","",0],["剤","TỄ","dịch tễ","Văn (文) Hóa (H) dịch TỄ như con dao 2 lưỡi (刂)","ZAI","",0],["猶","DO","do dự","DO (猶)có Rượu (酋) và thịt Chó (犭)nên còn DO DỰ nhậu THÊM lúc nữa.","YUU","",0],["唯","DUY","duy nhất, duy tâm","(隹) (口) Con chim là khẩu súng duy nhất của tui","YUI, I","",0],["縁","DUYÊN","duyên số","sợi dây糸 kéo con NHÍM và con LỢN thành mối lương duyên","EN","fuchi",0],["礁","TIỀU","đá ngầm","Lấy đá ngầm đanh lửa nướng chim","SHOO","",0],["紳","THÂN","đàn ông","Ngày xưa chỉ có những người làm quan lớn mang thân phận quyền quí với đc phép quấn một cái đai lớn, dệt từ những sợi CHỈ quanh THÂN mình gọi là THÂN SĨ","SHIN","",0],["琴","CẦM","đàn, độc huyền cầm","Làm Vua từ cổ chí Kim đều có cái thú chung là tửu và sắc. Thích uống rượu và nghe người đẹp chơi đàn, nhất là Dương Cầm. tôi ĐANG làm vua nên tui bít","KIN","koto",0],["塑","TỐ","đắp tượng","Thổ nghịch ( chọc ghẹo) nguyệt nên bị tố cáo, phải bồi đắp tinh thần","SO","",0],["沼","CHIỂU","đầm lầy","召 NƯỚC氵 TRIỆU tập Nguyễn Đình CHIỂU lội xuống đào ao.","SHOO","numa",0],["宵","TIÊU","đầu buổi tối, nguyên tiêu","TIÊU phí nhiều điện khi ở Nhà vào BUỔI TỐI","SHOO","yoi",0],["斥","XÍCH","đẩy ra, bài xích","ai dùng Búa mà chuôi bị nứt thì Xích lại rồi đuổi ra ngoài.","SEKI","",0],["嚇","HÁCH","đe dọa, hách dịch","Miệng hống HÁCH thét ra lửa Đỏ để dọa nạt người khác","KAKU","",0],["逓","ĐỆ","đệ trình","cầm 2 cái khăn và búa đi đệ trình trên con đường này","TEI","",0],["唱","XƯỚNG","đề xướng","XƯỚNG ca là cái nghề dùng MIỆNG (khẩu) hát NGÀY (nhật) qua NGÀY(nhật)","SHOO","tona(eru)",0],["嫁","GIÁ","đi lấy chồng","Sau khi xuất giá (嫁) thì con gái (女) chỉ ở nhà (家) nội trợ.","KA","yome, totsu (gu)",0],["轄","HẠT","địa hạt","轄 車 việc nhỏ như HẠT cát . có mỗi việc CAI QUẢN chiếc XE cũng không xong. đúng là đồ 害 ăn HẠI","KATSU","",0],["嫡","ĐÍCH","đích tôn, chính thê","tìm 1 người phụ nữa thích hợp là mục ĐÍCH hợp pháp của mỗi người đàn ông","CHAKU","",0],["款","KHOẢN","điều khoản","Chiến sĩ 士 ra chỉ thị 示 bị thiếu 欠 điều KHOẢN 款.","KAN","",0],["条","ĐIỀU","điều khoản, điều kiện","TRUY夂 tìm bên dưới cái CÂY những ĐIỀU bí ẩn.","JOO","",0],["附","PHỤ","đính kèm, phụ thuộc","阝này 付 附 ấp được giao phó cho người con nhưng anh cần được (PHỤ) giúp","FU","",0],["峰","PHONG","đỉnh núi","Các dãy núi cao thường có 3 tầng TRUY đuổi Trương TAM PHONG lên đỉnh NÚI","HOO","mine",0],["餓","NGẠ","đói","Khi đói tôi我 phải ăn飠","GA","",0],["蛍","HUỲNH","đom đóm, huỳnh quang","Côn trùng phát ra 3 tia sáng: đom đóm","KEI","hotaru",0],["読","ĐỘC","độc giả, độc thư","(売) (言) (読 Người Bán thường Nói câu gì? (Khi Bán 1 sản phẩm là thuốc)=> Đọc ĐỘC) kỹ hướng dẫn trước khi sử dụng","DOKU, TOKU, TOO","yo(mu)",0],["隊","ĐỘI","đội ngũ, quân đội","Bộ ĐỘI thì thích thịt HEO hai tai trên ĐỒI","TAI","",0],["胞","BÀO","đồng bào, tế bào","Bào thai phải được BAO bọc trong bụng mẹ trong 9 月","HOO","",0],["塚","TRỦNG","đống đất","Tiêm Chủng cho con lợn đang nằm trên mô đất","","tsuka",0],["僚","LIÊU","đồng liêu, quan liêu","Người mà gắn với nhau cả ngày từ nhỏ đến lớn là bạn đồng liêu đồng nghiệp","RYOO","",0],["盟","MINH","đồng minh, gia minh","Nếu là ĐỒNG MINH thì NGÀY MAI ăn chung một cái ĐĨA","MEI","",0],["鋳","CHÚ","đúc khuôn","CHÚ thuổi THỌ đã cao nhưng vẫn làm ĐÚC kim loại!","CHUU","i(ru)",0],["逮","ĐÃI","đuổi bắt","Cầm đinh ba đuổi nhau trên đường, nước bắn tung toé","TAI","",0],["逐","TRỤC","đuổi theo, khu trục","ngu như Lợn thì bị trục xuất ra ĐƯỜNG","CHIKU","",0],["糖","ĐƯỜNG","đường","vào trong nhà dùng tay bốc gạo cho vào mồm thì hoá ra là đường (ko fai gạo)","TOO","",0],["峠","TOOGE","đường đèo","ngọn núi chỗ cao chỗ thấp uốn éo thành đèo","","tooge",0],["岐","KÌ","đường núi","phân công cho CHI(支) nhánh trên NÚI(山) theo định KÌ","KI","",0],["峡","HẠP","đường núi hẹp","Tương lai (来) HẠP(峡) với công việc ở HẺM NÚI(山)","KYOO","",0],["畔","BẠN","đường ruộng, bờ hồ","Bán 1 Nửa BỜ Ruộng cho BẠN","HAN","",0],["鋼","CƯƠNG","gang","Kim cương dùng cắt thép","KOO","hagane",0],["醸","NHƯỠNG","gây nên","Ủ men rượu 6 ngày dưới 2 biểu đất gộp lại","JOO","kamo(su)",0],["侍","THỊ","gia nhân, samurai","Người ở chùa đích thị là người hầu của phật","JI","samurai",0],["佳","GIAI","giai nhân","Người có nhieu đất thì có giai nhân trong nhà","KA","",0],["脱","THOÁT","giải thoát","Anh trai bị cắm sừng nên Bỏ chị nguyệt","DATSU","nu(gu), nu (geru)",0],["井","TỈNH","giếng","4 phương 8 hướng, Tỉnh nào mà chả có Giếng","SEI, SHOO, I","",0],["肖","TIẾU","giống","CHÂN DUNG chị nguyệt cầm quả chuối tiêu trên đầu","SHOO","",0],["床","SÀNG","giường","GỖ MỘC để dưới HIÊN NHÀ -- là cái SÀNG GIƯỜNG hóng mát","SHOO","toko, yuka",0],["弐","NHỊ","hai, số hai (giống 二)","Bọn Dặc弋 nói 1 là 2","NI","",0],["項","HẠNG","hạng mục","Đầu làm công việc liên quan tới các hạng mục","KOO","",0],["廊","LANG","hành lang","MÁI HIÊN nhà có NGƯỜI TỐT đứng trên GÒ ĐẤT -- là HÀNH LANG","ROO","",0],["酌","CHƯỚC","hầu rượu, chuốc rượu","CHÂM CHƯỚC cho việc đi uống rượu mà cầm theo bao","SHAKU","ku(mu)",0],["系","HỆ","hệ thống, hệ số","Các sợi tơ treo theo 1 hệ thống","KEI","",0],["戯","HÍ","hí kịch","Dùng cây mác戈 HƯ虚 cấu đánh nhau cười hi hí...","GI","tawamu(reru)",0],["嫌","HIỀM","hiềm khích","Phụ nữ thường có HIỀM khích việc KIÊM (兼) nhiều thứ.","KEN, GEN","kira(u), iya",0],["彰","CHƯƠNG","hiển chương","Sớm đứng dậy vươn lên 3 lần sẽ được tuyên dương","SHOO","",0],["献","HIẾN","hiến dâng, hiến tặng, hiến thân","Hiến tặng chó cho miền nam","KEN, KON","",0],["淑","THỤC","hiền thục","Có một cậu bé nhỏ (小さい)ngồi vắt chéo chân (又) ở trên (上) hồ nước (氵Bộ Thuỷ ) rất điềm tĩnh","SHUKU","",0],["孝","HIẾU","hiếu thảo","Người CON có HIẾU đi cuốc ĐẤT cho mẹ","KOO","",0],["菊","CÚC","hoa cúc","Ngày xưa hoa cúc đc trồng bao quanh lúa","KIKU","",0],["粧","TRANG","hóa trang","Ngày xưa hoá trang dùng bột gạo lẫn đất hoá trang trong nhà","SHOO","",0],["還","HOÀN","hoàn trả","Đi đường 辶 xa xôi để hoàn trả lại 3 mắt目","KAN","",0],["帝","ĐẾ","hoàng đế","Một mình tự lập 立 cân巾 cả thế giới chỉ có thể là vua","TEI","",0],["皇","HOÀNG","hoàng đế","Ông vua tóc màu trắng thì gọi là tiên hoàng","KOO, OO","",0],["后","HẬU","hoàng hậu","hoàng hậu gì mà cứ mở miệng ra là nói F!!ck","KOO","",0],["妄","VỌNG","hoang tưởng","Phụ nữ chết亡 vì sự nhẹ dạ cả tin hy vọng viễn vông","MOO, BOO","",0],["憾","HÁM","hối hận","Co. Tim dựng lên vì cảm感 giác hối tiếc","KAN","",0],["姻","NHÂN","hôn nhân","nhân因 Phụ nữ sau hôn thì như đi tù","IN","",0],["汽","KHÍ","hơi nước, khí","气 汽 NƯỚC bay HƠI thành thể KHÍ","KI","",0],["勲","HUÂN","huân chương, huân công","dù bạn có dùng Lửa đốt thì Trọng( 重 )Lực ( 力 ) của Huân chương vẫn k đổi","KUN","",0],["凶","HUNG","hung khí, hung thủ","kẻ hung ác làm đảo lộn KHU 区 đất này","KYOO","",0],["幻","HUYỄN","huyễn hoặc","Yêu幺 cái J mà k biết là ảo tưởng","GEN","maboroshi",0],["享","HƯỞNG","hưởng thụ","con nít thì ko biết lo xa, miệng chỉ biết ăn uống, đầu óc chỉ lo suy nghĩ hưởng thụ","KYOO","",0],["叙","TỰ","kể lại","kẻ mà nhắc đi nhắc lại 又 mấy chuyện Dư 余 thùa thì hay tự sự 1 mình","JO","",0],["晶","TINH","kết tinh","Sự kết tinh của 3 mặt trời","SHOO","",0],["銘","MINH","khắc","TIỀN bạc + DANH lợi, dù văn MINH hay cổ điển đều là truy cầu của nhiều người","MEI","",0],["懇","KHẨN","khẩn khoản, khẩn đãi","Khẩn bằng lương tâm con lợn","KON","nengo(ro)",0],["砲","PHÁO","khẩu pháo","Pháo được bọc đá","HOO","",0],["契","KHẾ","khế ước","Ông chủ cầm đao to làm Khế ước","KEI","chigi(ru)",0],["圏","QUYỂN","khí quyển","quyển巻 Bao bọc sách là khí quyển","KEN","",0],["裸","LÕA, KHỎA","khỏa thân","Hoa QUẢ đặt lên BÀN THỜ phải k đc mặc gì giống như gà KHOẢ thân vậy","RA","hadaka",0],["芋","DỤ","khoai tây, khoai lang","KHOAI to ấm no VŨ trụ","","imo",0],["域","VỰC","khu vực, lĩnh vực","HOẶC或 là đi qua đất này,, hoặc là xuống VỰC","IKI","",0],["拡","KHUẾCH","khuếch đại","Dùng tay khuyếch đại mở rộng","KAKU","",0],["桟","SẠN","khung gỗ, xà nhà","hai(二) (戈) Mộc(木) người qua khách SẠN mạc đến nỗi chả có \"giá để đồ\"","SAN","",0],["騎","KỊ","kị sĩ","奇 Kị sĩ Cưỡi ngựa với con bạch Mã Kỳ diệu.","KI","",0],["憶","ỨC","kí ức","người tâm (忄) đầu ý (意) hợp sẽ luôn tồn tại trong ký ức (憶)","OKU","",0],["稼","GIÁ","kiếm tiền","Ngày xưa cây Lúa (HÒA) có GIÁ nên cả GIA đình dựa vào đó để KIẾM TIỀN","KA","kase(gu)",0],["鉛","DUYÊN","kim loại chì","cho dù là vàng 金 mà qua tám 八 cái miệng 口 thì cũng thành chì 鉛","EN","namari",0],["遍","BIẾN","lần","nhũng CỮA hiệu SÁCH có mặt khắp nơi trên ĐƯỜNG rất phổ BIẾN","HEN","",0],["楼","LÂU","lầu, tòa nhà cao","CÂY 木 GẠO 米 mà người CON GÁI 女 đã trồng. đc cất giữ ở LÂU 楼 đài..","ROO","",0],["論","LUẬN","lí luận, ngôn luận, thảo luận","Ngôn言 luân侖 cộng là ngôn luận","RON","",0],["暦","LỊCH","lịch","Ngày xưa đi rừng về nhà là đếm lịch 1 ngày","REKI","koyomi",0],["邦","BANG","liên bang","13 bức tường tạo nên liên bang","HOO","",0],["錠","ĐĨNH","liều thuốc","Muốn cất vàng ổn định thì phải dùng Đĩnh ( Khoá )","JOO","",0],["炉","LÔ","lò","Cửa nhét Lửa vào là cửa LÒ","RO","",0],["虞","NGU","lo lắng, ưu ngu","con hổ ăn bắp ngô xong bị ngu đi, lúc nào cũng sợ hãi","","osore",0],["窯","DIÊU","lò nung","Cho con Dê vào LÒ nấu DIÊU","YOO","kama",0],["掌","CHƯỞNG","lòng bàn tay","Hòa Thượng (尚) giơ Tay (手) tung CHƯỞNG","SHOO","",0],["漏","LẬU","lộ","Nước mưa rò rỉ trước cửa phòng","ROO","mo(ru), mo (reru), mo (rasu)",0],["孔","KHỔNG","lỗ hổng","Nuôi con nhỏ 子 chỉ có 乙ỗ , KHỔNG có lãi đâu!","KOO","",0],["坑","KHANH","lỗ, lỗ đào","Kháng亢 chỉ KHANH bị chôn xuống HỐ đất土","KOO","",0],["凸","ĐỘT","lồi ra","con cu Đột ngột Lồi lên","TOTSU","",0],["繭","KIỂN","lông mày","(糸) Dưới chậu cỏ KIỂN, Trùng 1 bên và Ty 1 bên","KEN","mayu",0],["班","BAN","lớp","Nước hai vua phải chia ra ban cầm đao hoà giải ở giữa","HAN","",0],["絹","QUYÊN","lụa","chỉ được nhả từ miệng ông trăng ra gọi là lụa","KEN","kinu",0],["羅","LA","lụa","Nhìn theo Chỉ dẫn của LA Bàn đi bắt Chim","RA","",0],["倫","LUÂN","luân lí","NGƯỜI vào nhà SÁCH tìm đọc LUÂN 侖lí.","RIN","",0],["銑","TIỂN","luyện thép","Đồng tiền đi trước là đồng tiền để mua gang","SEN","",0],["刃","NHẬN","lưỡi dao","ĐAO đã có CHỦ , NHẬN vơ là CHÉM","JIN","ha",0],["俸","BỔNG","lương bổng, bổng lộc","người sếp trao BỔNG lộc bằng 1 con bò cho 3 nam 8 nữ","HOO","",0],["硫","LƯU","lưu huỳnh","Đá LƯU huỳnh","RYUU","",0],["摩","MA","ma sát","Dùng tay lấy 2 cây đan chặt vào nhau làm mái hiên tạo ra Ma sát","MA","",0],["妊","NHÂM","mang thai","Phụ nữ lúc mang thai đc coi như vua","NIN","",0],["娠","THẦN","mang thai","Phụ Nữ xem đứa con MANG trong bụng như thiên THẦN","SHIN","",0],["丹","ĐAN","màu đỏ","Viên thuốc nhìn như cái thuyền không mũi k người lái","TAN","",0],["褐","HOẠT","màu nâu","Ngửi Mùi là biết Quả Thị có HẠT màu NÂU","KATSU","",0],["苗","MIÊU","mầm","Lúa non ngoài ruộng miêu tả bằng hoa cỏ","BYOO","nae, nawa",0],["芽","NHA","mầm, manh nha","艹 (牙 ôオ Cô giáo thảo ( THẢO) vừa ăn Nha đam NHA) vừa cầm","GA","me",0],["敏","MẪN","mẫn cảm","MỖI ngày đều bị ĐÁNH nên rất MẪN CẢM với đòn roi","BIN","",0],["畝","MẪU","mẫu đất (đo lường)","Ở Đầu kia có 9 MẪU ruộng","","se, une",0],["麗","LỆ","mĩ lệ","Hươu鹿 có hai sừng nhung trên đầu nữa đúng là tráng lệ","REI","uruwa(shii)",0],["倣","PHỎNG","mô phỏng","Phóng放 Người ta mô PHỎNG lại kĩ thuật lao","HOO","nara(u)",0],["媒","MÔI","môi giới","Phụ nữ môi giới nói lời ngon ngọt như quả chín mọng trên cây","BAI","",0],["唇","THẦN","môi, đôi môi","THẦN thái của MIỆNG thể hiện rõ trên MÔI","SHIN","kuchibiru",0],["升","THĂNG","một đấu (đo lường)","Chi 10(十) nghìn (千) yên sẽ được thăng chức","SHOO","masu",0],["厘","LI","một li","里với sườn厂 Thật nhỏ bé khi cãi lí núi rộng lớn","RIN","",0],["壱","NHẤT","một, số một (giống 一)","binh Sĩ quàng Khăn cười Hihi là sướng Nhất","ICHI","",0],["肪","PHƯƠNG","mỡ, chất béo","Vô Phương cứu chữa nếu Thịt bị nhiễm Mỡ","BOO","",0],["購","CẤU","mua","Dùng tiền mua đi bán lại 2 đống đất đai","KOO","",0],["牧","MỤC","mục đồng, du mục","Tay tác động vào bò là người chăn dắt: mục sư","BOKU","maki",0],["岬","GIÁP","mũi đất","ở cạnh núi có mot mảnh ruộng chồi lên gọi là mũi đất","","misaki",0],["崎","KHI","mũi đất","KHI leo núi mà không gặp đường gập ghềnh thì đúng là một điều kì diệu","","saki",0],["墨","MẶC","mực tàu","Ngày xưa đất đen dùng làm mực","BOKU","sumi",0],["堀","QUẬT","mương","khai Quật(堀） là đưa THi(尸） thể Xuất（出） ra khỏi lòng Đất（土）","","hori",0],["某","MỖ","nào đó, ai đó","Cây木 NGỌT甘 CAM là của bản MỖ","BOO","",0],["匿","NẶC","nặc danh","Người trẻ 若いnằng nặc đòi chơi chò chốn tìm (chốn vào tủ)","TOKU","",0],["炊","XUY","nấu cơm","Lửa mà bị thiếu XUY ra ko thể nấu ăn","SUI","ta(ku)",0],["慢","MẠN","ngạo mạn","Con tim ngạo mạn đứng nhìn mặt trời","MAN","",0],["吟","NGÂM","ngâm nga, ngâm thơ","(今) NGÂM（吟） MỒM（口） BÂY GIỜ mà thơ là sưng nghe con","GIN","",0],["漬","TÍ","ngâm tẩm","chủ主 NGÂM漬 SÒ貝 氵một Ông VỎ xuống NƯỚC TÍ","","tsu(keru), tsu (karu)",0],["詠","VỊNH","ngâm vịnh","Lời Nói 言 Vĩnh Cửu 永 là Ngâm Thơ 詠 Nói 言 lời Vĩnh Cửu 永 hay như Ngâm Thơ 詠","EI","yo(mu)",0],["偶","NGẪU","ngẫu nhiên","Ngu禺 một Người Ngẫu nhiên bị","GUU","",0],["憩","KHẾ","nghỉ ngơi","lúc nghỉ ngơi lưỡi và tim vẫn tự hoạt động","KEI","iko(i), iko(u)",0],["斜","TÀ","nghiêng","Dư một Đấu thì bị nghiêng một bên","SHA","nana(me)",0],["沖","XUNG","ngoài khơi","giữa 中 nước 水 là biển khơi muôn Trùng con sóng","CHUU","oki",0],["璽","TỈ","ngọc tỉ","玉)mà trời(天) xuống(雨) ngọc( ban như mưa là ngọc tỉ","JI","",0],["墓","MỘ","ngôi mộ","Trên là cỏ hoa mặt trời chiếu dưới có mái đất che là ngội mộ","BO","haka",0],["偽","NGỤY","ngụy trang, ngụy tạo","Người NGỤY biện cho hành Vi sai trái của mình Người(人) xô(ソ) điểu(鳥) ?","GI","itsuwa(ru), nise",0],["稿","CẢO","nguyên cảo, bản viết","Bạn HOÀ 禾 viết bản thảo (CẢO) 稿 được đánh giá CAO 高","KOO","",0],["虐","NGƯỢC","ngược đãi","七 上 7 con Em đag bị NGƯỢC đãi ( trêu chọc, bắt nạt) trên sườn núi","GYAKU","shiita(geru)",0],["唐","ĐƯỜNG","nhà Đường, Trung quốc","Miệng口 (em) trong nhà 广nói ra ngoài Đường","TOO","kara",0],["閑","NHÀN","nhàn hạ, rảnh","Nhàn rỗi nên trồng cây ở cổng","KAN","",0],["仁","NHÂN","nhân nghĩa","Giữa hai con người với nhau luôn phải có lòng nhân đạo và nhân nghĩa.","JIN, NI","",0],["人","NHÂN","nhân vật","giống hình người đang đi có 2 chân xoạc ra","JIN, NIN","hito",0],["斉","TỀ","nhất tề","quần áo Chỉnh Tề(斉). Chắp Tay (廾 )1 (一 ) lạy rồi vắt chéo 2 tay trước khi đọc bài diễn Văn (文 )","SEI","",0],["儒","NHO","nho giáo","Nhu需 Ngày xưa mọi Người đều có cầu học chữ NHO","JU","",0],["尼","NI","ni cô","泥 là bùn, giống như cái xấu phàm tục.Người xa lìa phàm tục là ni cô 尼 cương thi cười hihi là ni cô","NI","ama",0],["粘","NIÊM","niêm mạc","Có cơm DÍNH trên miệng","NEN","neba(ru)",0],["膜","MẠC","niêm mạc","Trăng(月) Cỏ(艹) mỏng manh ven đường sao với được Mặt Trời(日) vĩ ĐẠI(大","MAKU","",0],["硝","TIÊU","nitrat, diêm tiêu","đá石 trăng月 hòn để qua đêm sẽ tỏa ra mùi thuốc súng","SHOO","",0],["啓","KHẢI","nói","vừa đánh(攵) vừa nói(口) mới khai sáng(khải) được những kẻ không bao giờ ra khỏi cửa nhà (戸)","KEI","",0],["僕","BỘC","nô bộc","một người亻 đi đằng trước và 3 三người人 đi đằng sau vác trên vai 2 tầng hàng hoá(tầng trên 4 thanh dọc, tầng dưới 2thanh dọc) chính là những NÔ bộc","BOKU","",0],["閣","CÁC","nội các","Các vị quan khách đang đứng ngoài cổng","KAKU","",0],["浮","PHÙ","nổi, phù du","Túm tóc đứa TRẺ đang phập PHÙ NỔI trên mặt Nước","FU","u(ku), u (kareru), u (kabu), u (kaberu)",0],["脹","TRƯỚNG","nở ra, bành trướng","trăng đêm 16 trăng tròn , e lên 16 tóc dài , bụng TRƯỚNG","CHOO","",0],["債","TRÁI","nợ, quốc trái, công trái","Trách nhiệm của Người dân là phải mua TRÁI phiếu","SAI","",0],["岳","NHẠC","núi cao","NHẠC phụ làm lính丘 trên núi山","GAKU","take",0],["飼","TỰ","nuôi","Chủ + cho ăn = chăn nuôi","SHI","ka(u)",0],["汁","TRẤP","nước quả","Nấu Mười lần Nước thì ra được nồi Súp","JUU","shiru",0],["抱","BÃO","ôm, hoài bão","Tay tôi ÔM ẤP bao hoài BÃO","HOO","da(ku), ida(ku), kaka(eru)",0],["翁","ÔNG","ông lão","ông già nhà tớ từng là 1 vũ 羽 công公","OO","",0],["凡","PHÀM","phàm nhân","kẻ phàm phu tục tử thì chỉ được ngồi ghế đẩu thôi Người PHÀM tục chui xuống gầm Bàn.","BON, HAN","",0],["曹","TÀO","phán xử","mỗi ca khúc của nam tào đều dk cập nhật hàng ngày","SOO","",0],["廷","ĐÌNH","pháp đình, triều đình","DẪN nhau ra ĐÌNH,NHÂM 壬nhi câu chuyện..","TEI","",0],["析","TÍCH","phân tích","Dùng rừu bổ cây ra phân tích","SEKI","",0],["剖","PHẪU","phẫu thuật, giải phẫu","phẫu thuật phải cầm đao đứng và nói","BOO","",0],["妃","PHI","phi tần","kỉ己 Phụ nữ tự là hoàng phi chốn hậu cung","HI","",0],["佐","TÁ","phò tá, trợ tá","Người [イ]phó tá là bàn tay trái [左] đắc lực","SA","",0],["訪","PHÓNG, PHỎNG","phóng sự; phỏng vấn","言 方 Gửi lời hỏi thăm (NGÔN) đến PHƯƠNG ấy ! Khách thập phương ghé thăm hỏi chuyện","HOO","otozu(reru), tazu(neru)",0],["譜","PHỔ, PHẢ","phổ nhạc, gia phả","gia phả trong gia đình có thể được (PHỔ) 譜 truyền miệng 言 cho đời sau, ngày qua ngày日, từng đời từng đời並","FU","",0],["滋","TƯ","phồn thịnh","trời mưa hai đôi YÊU nhau uống sữa tâm TƯ riêng","JI","",0],["祉","CHỈ","phúc chỉ","Bị bắt dừng lại (止), chỉ thị(ネ) là hãy cầu PHÚC","SHI","",0],["弔","ĐIẾU","phúng điếu","một丨 弓 bắn mũi tên tiễn đưa hương hồn","CHOO","tomura(u)",0],["策","SÁCH","phương pháp, đối sách","sách thời xưa làm bằng trúc, lấy dây buộc lại từng thanh với nhau.","SAKU","",0],["錘","CHÙY","quả nặng, cái chùy","Kim 金thuỳ mua chuỳ NẶNG重 16 lạng nên RỦ XUỐNG 垂","SUI","tsumu",0],["吏","LẠI","quan lại, thư lại","Quan lại là bậc trượng 丈 phu không chỉ nói bằng cái miệng口","RI","",0],["冠","QUÁN","quán quân","Đội NGUYÊN cái MŨ vương miện cảm giác hơi THỐN","KAN","kanmuri",0],["棺","QUAN","quan tài","Quan chết đi cũng vào hòm gỗ quan tài","KAN","",0],["喝","HÁT","quát, mắng","Ngày ngày日 chỉ ÔM 勹 THÌAヒ trong MỒM 口mà cũng bị QUÁT","KATSU","",0],["郡","QUẬN","quận","Nhà của cậu ( 君) ở quận 13 (阝) à? Vùng đất của QUÂN CHỦ thì được phong làm QUẬN HUYỆN]","GUN","",0],["敵","ĐỊCH","quân địch","ĐỊCH(敵) LẬP(立) GIỚI(冂) CỔ(古) Kẻ đã thêm đường BIÊN ở một thành sau khi ĐÁNH VỖ (攵) mặt chúng ta.","TEKI","kataki",0],["郷","HƯƠNG","quê hương","Quê hương một bên là mẹ (M ) 1 bên là bố (B ) ở giữa là đồ ăn Yêu 幺quê hương là không phụ 阝lòng người tốt 艮","KYOO, GOO","",0],["民","DÂN","quốc dân, dân tộc","Người, dân gọi 口 nhau bằng họ tên 氏 (氏) (口 Thị nở há Mồm ngáp KHẨU) toàn Dân ngất hết.","MIN","tami",0],["慶","KHÁNH","quốc khánh","Nhờ có lòng Ái (愛) quốc mà đã loại bỏ được Móng Vuốt (爫) của bọn thực dân, nhà nhà Bốn phương ăn mừng quốc Khánh (慶) cái số 4 nhìn thoáng xíu để dễ nhớ thôi chứ ko phải là chữ Tứ","KEI","",0],["糾","CỦ","quy củ","4 sợi dây làm nên quy củ","KYUU","",0],["朗","LÃNG","rõ ràng","Trăng月 tốt良 朗 là trăng SÁNG vằng vặc","ROO","hoga(raka)",0],["墜","TRỤY","rơi, trụy lạc","Đội隊 quân bị bắn rơi xuống đất土","TSUI","",0],["腸","TRÀNG","ruột","Đến tháng dương 昜 đau đại tràng vì NGÀY日 ngày không có VẬT mà ăn","CHOO","",0],["堕","ĐỌA","sa đọa","Có 13 miếng đất để rồi truỵ lạc","DA","",0],["漠","MẠC","sa mạc","Ban NGÀY nắng TO Cây CỎ cần phải có NƯỚC để sống sót trên Sa MẠC","BAKU","",0],["酪","LẠC","sản phẩm bơ sữa","các各 vị uống rượu酉 thì hay ăn lạc","RAKU","",0],["昭","CHIÊU","sáng","(昭) Triệu hồi mặt trời thì sáng. (日) (召) NGÀY mai TRIỆU tập nhân dân trong làng để CHIÊU mộ những gương mặt SÁNG SỦA tham gia hội thi văn nghệ.","SHOO","",0],["愉","DU","sáng khoải, dễ chịu","Con TIM 忄 rất VUI khi DU lịch 1 THÁNG 月 với 1 ĐAO và cái NÓN trên đầu","YU","",0],["抄","SAO","sao chép, trích ra","dùng tay viết chữ thật nhỏ để sao chép tài liệu Thiếu(少) tay(手) SAO (抄) chép bài ?","SHOO","",0],["巣","SÀO","sào huyệt","Trên cây có tổ chim có 3 con chim ngóc đầu ra","SOO","su",0],["勅","SẮC","sắc lệnh vua ban","Ra SẮC lệnh Thúc束 đẩy Lực力 lượng","CHOKU","",0],["猟","LIỆP","săn bắn","Sử dụng用 3 con LỢN làm mồi săn","RYOO","",0],["辱","NHỤC","sỉ nhục","Thần mà bị thốn thì đúng là Nhục","JOKU","hazukashi (meru)",0],["涯","NHAI","sinh nhai","Có 2 mảnh đất ở dưới sườn núi để Sinh Nhai(kiếm sống) thì bị ngập nước.","GAI","",0],["誕","ĐẢN","sinh ra","con người sinh ra nói năng được hay không nó còn tùy thuộc vào cái duyên","TAN","",0],["殖","THỰC","sinh sản","歹 直 Cái chết trực tiếp là do THỰC dân gây ra","SHOKU","fu(eru), fu (yasu)",0],["較","GIÁC","so sánh","Giao lưu 交 (so sánh )xe cộ 車","KAKU","",0],["浪","LÃNG","sóng","Người có LƯƠNG tâm thì không LÃNG Phí NƯỚC","ROO","",0],["帳","TRƯỚNG","sổ","cái KHĂN (巾) bị kéo DÀI(長) -- để làm MÀN CHE cho những CUỐN SỔ ngân hàng","CHOO","",0],["漆","TẤT","sơn, sơn mài","Thuỷ đội Mũ đi TẤT cầm cây SƠN Nước người ta dùng 2 loại nước và gỗ để tao ra tất cả cây sơn","SHITSU","urushi",0],["崇","SÙNG","sùng kính, sùng bái","Trên núi(山) thường tôn SÙNG tông(宗) giáo","SUU","",0],["矯","KIỂU","sửa cho đúng, kiểu chính","喬 TÊN矢 thúy KIỀU chỉ thích trai THẲNG như MŨI thôi","KYOO","ta(meru)",0],["穂","TUỆ","tai","Bông LÚA là ân HUỆ mà trí TUỆ con người tạo ra đứng trên ruộng lúa để tay vào tim đón nhận ân huệ","SUI","ho",0],["禍","HỌA","tai họa","Qua loa 咼 là biểu thị 礻 của tai hoạ 禍","KA","",0],["閥","PHIỆT","tài phiệt","閥 戈CỔNG 門 伐 bọn quân Phiệt rất độc ác cứ thấy Người Đi Qua là Phạt","BATSU","",0],["忍","NHẪN","tàn nhẫn, nhẫn nại","Dù lưỡi dao (Nhận) có kề tim (tâm) cũng Nhẫn nhịn.","NIN","shino(bu), shino(baseru)",0],["舶","BẠC","tàu","Thuyền trắng là thuyền bạc lớn","HAKU","",0],["肢","CHI","tay chân, tứ chi","NGUYỆT mở CHI nhánh làm móng CHÂN móng TAY...","SHI","",0],["碑","BI","tấm bia","4 BIA mộ Đá ngoài ruộng trông thật BI thảm","HI","",0],["肝","CAN","tâm can","Phần thịt khô khan trong cơ thể là gan( bộ nguyệt khi nào cũng chỉ bộ phận thịt trong cơ thể người) Công nhận gan luộc ăn khô thật :c","KAN","kimo",0],["郎","LANG","tân lang","Người bụng to do ăn tốt kia chính là tân Lang","ROO","",0],["疾","TẬT","tật bệnh","bị mũi tên bắn thì không bệnh cũng tật","SHITSU","",0],["皆","GIAI","tất cả","MỌI NGƯỜI cười HI HI xem răng ai TRẮNG hơn","KAI","mina",0],["弊","TỆ","tệ hại, tệ xá","(米) (夂) (廾) Xin gạo mà đến sau thì TỆ lắm phải chắp 2 tay mà lạy","HEI","",0],["赦","XÁ","tha thứ, dung xá, xá tội","Đánh攵 cho đỏ赤 đít rồi mới ân xá","SHA","",0],["滝","LANG","thác nước","Con RỒNG NƯỚC cứ LANG thang bơi trên THÁC NƯỚC","","taki",0],["瀬","LẠI","thác nước","Chỗ mà bó củi trơ cả đầu lên là vùng nước nông","","se",0],["泰","THÁI","thái bình","3 người thư THÁI như NƯỚC","TAI","",0],["廉","LIÊM","thanh liêm","Ở dưới mái nhà kiêm 兼 nhiều việc một lúc là liêm khiết","REN","",0],["累","LŨY","thành lũy, tích lũy","Chỉ vì Ruộng Đất mà liên LUỴ đến tình cảm Anh Em","RUI","",0],["郭","QUÁCH","thành quách","ĐẦU tiên,dùng MIỆNG dạy TRẺ dựng BỜ ĐẤT làm THÀNH QUÁCH","KAKU","",0],["市","THỊ","thành thị, thị trường","che亠 CÂN巾 ở chợ mỗi nhà có mái và 1 cái","SHI","ichi",0],["浄","TỊNH","thanh tịnh","Đất Nước không còn chiến Tranh trở thành nơi thanh TỊNH","JOO","",0],["伐","PHẠT","thảo phạt","Người (イ) nào bị Phạt đứng Qua ( 戈) 1 bên","BATSU","",0],["操","THAO","thao tác","Tay thao tác.. đưa vật phẩm lên cây..","SOO","misao, ayatsu (ru)",0],["迭","ĐIỆT","thay thế","ĐIỆT, lại thất失 bại, thôi đi cho thằng khác đến thay phiên khi thất失 bại, chỉ cần thay thế con đường khác","TETSU","",0],["進","TIẾN","thăng tiến, tiền tiến, tiến lên","Chim đi lên tiến tới","SHIN","susu(mu), susu(meru)",0],["茎","HÀNH","thân cây cỏ","Lại được ăn HÀNH dưới Đất","KEI","kuki",0],["仙","TIÊN","thần tiên","Người sống trên Núi là TIÊN","SEN","",0],["紀","KỈ","thế kỉ, kỉ nguyên","Mất cả thế KỈ để rút SỢI DÂY kinh nghiệm.","KI","",0],["詩","THI","thi phú","Lời Nói 言 trên Chùa 寺 tựa Thi Ca 詩","SHI","",0],["視","THỊ","thị sát, thị lực, giám thị","NHÌN (見) theo CHỈ THỊ (示) để kiểm tra THỊ LỰC (視)","SHI","",0],["遷","THIÊN","thiên đô, thiên di","THIÊN天 ĐƯỜNG đi TÂY to lớn ko có tri KỶ thì rất thăng trầm","SEN","",0],["雷","LÔI","thiên lôi","Thiên Lôi(雷)cho mưa雨xuống ruộng(田","RAI","kaminari",0],["禅","THIỀN","thiền tọa, tĩnh lặng","礻 Đơn単 Thị giả thường độc ngồi Thiền.","ZEN","",0],["駄","ĐÀ","thồ hàng","ngựa 馬 béo 太 thì phải thồ hàng 駄(đà)","DA","",0],["吐","THỔ","thổ huyết, thổ lộ","cho ĐẤT vào MỒM thì bị NÔN là đúng rồi","TO","ha(ku)",0],["壌","NHƯỠNG","thổ nhưỡng","cô Nương (嬢) đó bỏ nghề làm gái (女) về quê làm Thổ (土) Nhưỡng","JOO","",0],["訳","DỊCH","thông dịch, phiên dịch","NÓI言 XÍCH尺 Dùng LỜI ngôn ngữ lại gần với nhau thì là DỊCH thuật","YAKU","wake",0],["俗","TỤC","thông tục, tục lệ","NGƯỜI ở trên núi CỐC có phong TỤC kỳ lạ","ZOKU","",0],["賦","PHÚ","thơ phú","tỉ phú giải quyết vũ 武lực bằng tiền貝","FU","",0],["芳","PHƯƠNG","thơm","Cỏ (艹) này ở Phương (方) nào mà thơm quá vậy","HOO","kanba(shii)",0],["薫","HUÂN","thơm","(艹) (重) (灬 (薰) Cỏ được chất lên từng đống rất nặng mang di đốt ) tạo ra hương thơm","KUN","kao(ru)",0],["獣","THÚ","thú vật","Có 3 con THÚ và 10 con chó ở ngoài đồng","JUU","kemono",0],["渓","KHÊ","thung lũng, khe núi","chồng(夫) lấy tay(Trảo) hứng nước(Thuỷ) ở thung lũng về nấu nhưng ít quá nên bị cơm Khê","KEI","",0],["睡","THỤY","thụy miên, ngủ","mắt目 chùn xuống垂 thì buồn ngủ","SUI","",0],["潮","TRIỀU","thủy triều","Nước thủy triều buổi sáng dâng ngày 20 của tháng nước biển dâng lên thành thuỷ triều","CHOO","shio",0],["艇","ĐĨNH","thuyền nhỏ","thuyền 舟 chở vật nhỏ cho triều đình 廷 thì được gọi là (ĐĨNH) 艇","TEI","",0],["亜","Á","thứ 2, châu á","Hai nước Trung (中) quốc có diện tích bằng cả châu Á","A","",0],["丙","BÍNH","thứ ba, can bính","BÍNH bong 1 tiếng bên Trong cái chuông","HEI","",0],["准","CHUẨN","thứ nhì","Chim cứng như Băng mới là hàng CHUẨN","JUN","",0],["嗣","TỰ","thừa kế","Chi cần nói 口 là con cháu của sếp (上司、) thì thủ tục giấy tờ (冊) ok hết","SHI","",0],["尺","XÍCH","thước","Con cương Thi (尸) lè cái lưỡi ra dài cả Thước (尺)","SHAKU","",0],["漸","TIỆM","tiệm cận, tiến dần tới","Khi đao Trảm từ từ Tiệm cận cổ thì mồ hôi vã ra","ZEN","",0],["倹","KIỆM","tiết kiệm","chỉ cần 1 người tiết kiệm thì 10 người sẽ đc ở trong nhà","KEN","",0],["泌","TIẾT","tiết ra, bài tiết","BÍ quá nước氵 tiểu tiết ra là điều tất必 yếu","HITSU, HI","",0],["索","SÁCH","tìm kiếm","Mất 10 (THẬP) đêm ( MỊCH) để tìm kiếm (TÁC) sợi tơ (MỊCH)","SAKU","",0],["脈","MẠCH","tim mạch","dưới ánh trăng 月 tàn, người sói đang biến đổi, mạch máu 脈 nổi lên, móng vuốt 爪 dài ra, bắt đầu quá trình biển đổi thành người sói","MYAKU","",0],["錬","LUYỆN","tinh luyện, tinh chế","Luyện kim ở phía đông","REN","",0],["悟","NGỘ","tỉnh ngộ","Nói 5 câu thì CON TIM mới NGỘ ra","GO","sato(ru)",0],["棟","ĐỐNG","tòa nhà","Cây chất đống phía đông để làm nhà","TOO","mune, muna",0],["遂","TOẠI","toại nguyện","Lợn vểnh tai đi tới toại nguyện","SUI","to(geru)",0],["訟","TỤNG","tố tụng","phát NGÔN 言 bừa bại nơi CÔNG 公 cộng sẽ bị KIỆN tụng 訟 ...","SHOO","",0],["括","QUÁT","tổng quát","khua TAY múa LƯỠI bao QUÁT vấn đề","KATSU","",0],["吉","CÁT","tốt lành, cát tường","Người có học (Sĩ) 士 luôn Nói (Khẩu) 口 ra những điều TỐT LÀNH (Cát) 吉","KICHI, KITSU","",0],["良","LƯƠNG","tốt, lương tâm, lương tri","Đói bụng ngồi nghĩ :Ăn (食 THỰC) uống đầy đủ thì rất là Tốt (良 LƯƠNG).","RYOO","yo(i)",0],["拷","KHẢO","tra tấn, tra khảo","(扌) (考) dùng tay suy nghĩ cách TRA KHẢO","GOO","",0],["斎","TRAI","trai giới","Anh Văn đẹp trai giao chỉ thị phải ăn chay","SAI","",0],["荘","TRANG","trang trại","Cỏ mọc trong Trang trại của tráng壮 sĩ","SOO","",0],["邸","ĐỂ","trang trại","Đê氐 vùng đất Để làm Lâu Đài thì phải có xung quang","TEI","",0],["朕","TRẪM","trẫm, vua xưng","ngẩng mặt lên trời 天 ngắm ánh 丷 trăng 月 tự xưng (TRẪM) 朕","CHIN","",0],["陣","TRẬN","trận mạc","bê (B) xe (車) ra trận (陣)","JIN","",0],["撤","TRIỆT","triệt thoái","Phải dùng TAY ĐÁNH KHẼ thì với giáo DỤC đc TRIỆTđể những đứa trẻ hư","TETSU","",0],["呉","NGÔ","triều Ngô, Trung quốc","ngồi trên ghế 2 chân đang ăn ngô","GO","",0],["呈","TRÌNH","trình bày, đệ trình","王 口 呈 đã làm vua thì miệng nói phải có (TRÌNH) độ","TEI","",0],["偵","TRINH","trinh thám","muốn biết 1 Người (亻) có Tiền貝 còn Trinh (貞) tiết hay không thì phải đi TRINH (偵) sát","TEI","",0],["貞","TRINH","trinh tiết","vượt lên trên上 cám dỗ đồng tiền貝 mới giữ được trinh tiết","TEI","",0],["軸","TRỤC","trục","Cái TRỤC bánh xe quay tự DO khi xe chạy","JIKU","",0],["庸","DUNG","trung dung, tầm thường","người dưới mái nhà ung dung sử dụng cây bút để vẽ 1 cách xoàng xĩnh kẻ dôヨ dụng用 hay thong DONG trong nhà làm việc bình thường","YOO","",0],["劾","HẶC","truy tội, khép tội","cứ hằng HẶC nỗ LỰC 力LUẬN TỘI con LỢN亥","GAI","",0],["丈","TRƯỢNG","trượng","TRƯỢNG phu thì NHẤT(一) định là có tài NGHỆ (乂)","JOO","take",0],["江","GIANG","trường giang, giang hồ","CÔNG trình NƯỚC chảy sông GIANG (江戸） Cô (Kou) đi qua VỊNH nhớ sang EDO","KOO","e",0],["寿","THỌ","trường thọ, tổi thọ","Trải qua 3 lần thốn thì sẽ sống THỌ","JU","kotobuki",0],["虜","LỖ","tù binh","TRONG NHÀ bắt giữ 7 七người đàn ông男 thô lỗ","RYO","",0],["囚","TÙ","tù nhân","Người bị giam trong 4 bức tường là tù nhân","SHUU","",0],["俊","TUẤN","tuấn kiệt, anh tuấn","là người TUẤN kiệt (俊) , thì dù có gian TRUY(夂) vẫn luôn thành thật(DUẪN)(允)","SHUN","",0],["殉","TUẪN","tuẫn tiết, tuẫn tử","歹 旬 Thành bộ xương sau Tuần 10 ngày khi TUẪN Tiết (chết để giữ gìn danh dự).","JUN","",0],["巡","TUẦN","tuần tra","Đi tuần 巡 bao giờ cũng dẫn 廴 theo 3 dấu nhỏ 巛","JUN","megu(ru)",0],["随","TÙY","tùy tùng","Sau bức TƯỜNG có有 tuỳ theo đường DẪN mà đi","ZUI","",0],["但","ĐÃN","tuy vậy, tuy nhiên","Mọi người イ vào ngày tết nguyên đán 旦 rất vui , tuy nhiên hay đãn trí 但","","tada(shi)",0],["択","TRẠCH","tuyển trạch","扌cầm 尺 TRẠCH択 Tay 2 cây xúc XÍCH mua ở nhơn . phải lựa chọn 1 trong 2 cây..","TAKU","",0],["紫","TỬ","tử ngoại","dứng lại đổ cafe vào sợi chỉ cho thành màu tím hoa TỬ Đằng(紫藤)rủ xuống như những sợi Tơ(mịch) màu TÍA làm ta phải Dừng(chỉ) lại Mỉm cười(ヒ)","SHI","murasaki",0],["諮","TƯ","tư vấn","vì miệng thiếu ngôn từ nên cần được tư vấn","SHI","haka(ru)",0],["侯","HẦU","tước hầu, hầu tước","Người đội mũ vai đeo cung tên chính là tước hầu","KOO","",0],["垣","VIÊN","tường","đắp 1001 Viên đất mới ra cái hàng rào Đắp đất 2 ngày ra khuôn viên hàng rào","","kaki",0],["互","HỖ","tương hỗ","LÀM KIỂU 69 LÀ HỖ TRỢ NHAU SUNG SƯỚNG","GO","taga(i)",0],["帥","SOÁI","tướng soái","(師) Giáo Sư bỏ mũ đi làm tướng 巾nảy Quan Tướng SOÁI là người cầm Cân mực","SUI","",0],["詳","TƯỜNG","tường tế (chi tiết)","Đến con DÊ còn nói đc một cách rõ ràng. TƯỜNG tận như thế huống chi con người","SHOO","kuwa(shii)",0],["威","UY","uy nghi, uy nghiêm","khi người phụ nữ nắm đc cái chuôi của sự thành công thì rất uy quyền","I","",0],["託","THÁC","ủy thác","nói 1 7 lần để ủy THÁC!","TAKU","",0],["且","THẢ","và, thêm nữa","Được thả ra ngoài một ngày có trăng","","ka(tsu)",0],["搬","BAN","vận chuyển","Sau khi BÀN (bạc) rồi chung TAY văng hết đồ lên THUYỀN NHỎ 舟 rồi dùng THÙ chèo thuyền chuyển đồ đi.","HAN","",0],["沿","DUYÊN","ven, dọc theo","TÁM cái Miệng nói chuyện bắn NƯỚC tung toé rất vô DUYÊN","EN","so(u)",0],["緯","VĨ","vĩ độ","Sợi Dây 糸tinh Vi韋 nhất là Vĩ tuyến","I","",0],["菌","KHUẨN","vi khuẩn","Hình ảnh của việc chống CỎ dại xâm nhập vào Phạm Vi trồng Lúa giống như việc chống Vi khuẩn xâm nhập vào cơ thể !","KIN","",0],["殻","XÁC","vỏ","Vũ Khí và XÁC binh Sĩ nằm ngổn ngang như VỎ chuối","KAKU","kara",0],["甲","GIÁP","Áo giáp, can giáp trong 12 con giáp","trái ngược sự TỰ DO -- là phải mặc ÁO GIÁP như MAI rùa","KOO, KAN","",0],["弧","HỒ","vòng cung, hình vòm","bắn CUNG弓 QUA瓜 HỒ","KO","",0],["宙","TRỤ","vũ trụ","vũ trụ là mái nhà tự do","CHUU","",0],["悦","DUYỆT","vui vẻ","Trái tim tôi mãn nguyện khi anh trai có 2 cái sừng trên đầu","ETSU","",0],["潟","TÍCH","vũng nước","TÍCH luỹ Cối đá làm đê Bao bọc Bãi Đất Ven Biển","","kata",0],["畑","VƯỜN","vườn","Năm nào cũng vậy, nông gia đốt 火 rơm dạ để ruộng 田 vườn 畑 tươi tốt hơn","","hata, hatake",0],["認","NHẬN","xác nhận, nhận thức","Lời thừa nhận như đao cứ vào tim","NIN","mito(meru)",0],["醜","XÚ","xấu xí","Quỷ uống rượu thì xấu xa tột độ","SHUU","miniku(i)",0],["覇","BÁ","xưng bá","月 革 西 Qua nhiều tháng cải cách để nuôi mộng xưng BÁ vượt phuong Tây","HA","",0],["髄","TỦY","xương tủy","Xương có đường dẫn bên trong là tuỷ","ZUI","",0],["志","CHÍ","ý chí, chí nguyện","Nhân SĨ có TÂM là người CHÍ lớn","SHI","kokoroza(su), kokorozashi",0],["宴","YẾN","yến tiệc","日 安 宴会 Thời dịch bệnh này mà đến ngày an toàn thì phải tổ chức Yến tiệc thôi","EN","",0],["謁","YẾT","yết kiến","(謁) (言) (匕) (勹) (日) Vào Yết kiến, nói chuyện về cái thìa để trong bao cả ngày bị bốc mùi (匂)","ETSU","",0],["素","TỐ","yếu tố, nguyên tố","Có thể làm Chủ được sợi Chỉ này, ngươi đúng là có Tố chất đó","SO, SU","",0],["丁","ĐINH","Can Đinh","nhất一 quyết 亅đóng đinh","TEI, CHOO","",0],["俵","BIỂU","Chia cho","BIẾU tặng NGƯỜI SĨ quan bộ Y phục","HYOO","tawara",0],["旋","TOÀN","Trở lại","(方), (疋) (旋) đi muôn Phương đến khi Nằm (nhân nằm) xuống, Thất thểu, Toàn mong trở lại quê hương","SEN","",0],["旨","CHỈ","Ngon","1 tuần CHỈ旨 có 7七 ngày日 là NGON rồi. Chứ 1 tuần mà có 15 ngày thì đi làm liên tục không nghỉ chắc mệt lắm","SHI","mune",0],["朱","CHU","Đỏ","CHU sa có MÙI VỊ 未tanh như máu ĐỎ tươi.","SHU","",0],["填","TRẦN","Lấp, lấp cho đầy","dùng đúng 10 cái dụng cụ để lấp vào chỗ trống trên đất","テンチン","は.まるは.める うず.めるしず. めるふさ.ぐ",0],["頬","GIÁP","gò má","Ông chồng (夫) dùng 2 Tay ( 丷 ) Giáp cái Đầu (頁) vào Cái Má","キョウ","ほおほほ",0],["崖","NHAI","Ven núi.","đất(土) (厂) (山) Hai lớp chồng lên nhau ở sườn của núi chính là vệ núi cao","ガイゲギ","がけきしはて",0],["亀","QUY","đi qua 2 cái ruộng là con rùa","Con rùa; hình dạng giống con rùa.đi qua 2 cái ruộng là con rùa","キキュウキン","かめ",0],["鴨","Giáp","Con vịt","chim đang đứng 1 chân ngoài đồng là vịt trời","","",0],["姦","GIAN","gian dâm, kẻ ác","女 Gian Dâm thác loạn cùng 3 người phụ nữ","","",0],["撥","BÁT","Trừ sạch, đánh tan","Dùng Tay (扌) Phát ( 發 ) thật mạnh 8 ( BÁT ) cái để trừ sạch bụi bẩn trên quần áo, chăn màn","","",0],["濾","LỰ","Lọc","7 七 lần suy nghĩ 思 mới nghĩ ra cách Lọc nước","","",0],["杓","Thược","Cái muôi, trói buộc","Lấy 1 mảnh gỗ của cây 木 và đẽo nó thành hình cái MUÔI cong cong 勺 như cánh tay bao bọc","","",0],["貶","BIẾM","châm biếm, hạ thấp","乏 貝 Châm BIẾM người nghèo không có tiền","","",0],["顎","NGẠC","Cái xương gò má, (quyền) xương quai hàm gọi là hạ ngạc","cái đầu có 2 con mắt và 5 cái cằm thì kinh ngạc !","ガク","あご, あきと",0],["脆","THÚY","Giòn, yếu. giòn xốp, dễ bóp vỡ","Thúy 脆 Tháng 月 này dùng mai Thúy脆(ma túy) sẽ gặp Nguy 危 hiểm.","","moroi, yowai, zei, sei, setsu",0],["旺","VƯỢNG","Giàu sang tốt đẹp","Tỷ phú Nhật 日 Vượng 王","D","",0],["捏","NIẾT","Nắm nặn, nắm đất gọi là niết.","Bàn tử dùng tay chia đôi trời và đất rồi về cõi niết bàn","","",0],["栞","CAN","Can thiệp","2 chiếc lá khô trên cây , SAN sẻ làm thẻ đánh dấu trang sách","","",0],["癌","NHAM","ung thư","NHAM nghĩa là bệnh ung thư, dấu hiệu của căn bệnh(NẠCH) là trong cơ thể, nổi tầm 3 cục vuông vuông xếp theo chữ PHẨM, lại to như NÚI","","がん",0],["拭","THỨC","lau quét","TAY 扌 PHÓNG 弋 lao luyện tập CÔNG 工 phu xong liền DỌN DẸP gọn gàng trước khi nghỉ","ショク, シキ","ぬぐ, ふ.く",0],["妖","YÊU","Đẹp (mĩ miều). Tả cái sắc con gái làm cho người ta say mê","女 夭 妖 NỮ giới mà YỂU điệu con trai mới YÊU","ヨウ","あや.しい",0],["罫","QUẢI","treo, vắt ngang","mắc VÕNG罒 trên cái cột TO ト trên 2 đống ĐẤT 土","ケイ, ケ","",0],["眉","MI","Lông mày","mái hiên尸 của mắt目 là lông mi","ミ, ビ","",0],["胚","PHÔI","Chửa, có mang mới được một tháng gọi là phôi. Đồ chưa xong hẳn gọi là phôi, nghĩa là mới có hình.","不 1一 月 CHƯA đầy THÁNG nên vẫn chỉ là PHÔI thai, chưa có hình người","ハイ","",0],["箋","TIÊN","Cuốn sách","ông TIÊN箋 cầm QUYỂN SÁCH đi qua 2 rừng trúc⺮. Trong quyển sách có ghi lại những đặc 戈 tính của cây trúc có thể dùng làm giáo mác","セン","ふだ",0],["瑠","LƯU","Ngọc lưu ly","VUA王 LƯU留 LI瑠 ông chữ rất nhiều ngọc LƯU","ル リュウ, ル","",0],["璃","LI","ngọc LƯU LI","Quân vương 王đội mũ rèn gươm. Đặt trong cối đá màu cườm lưu li","","",0],["楯","THUẪN","Thanh gỗ ngang ở lan can.","10 con mắt nhìn nhau bằng búa là mâu thuẫn楯","ジュン","たて",0],["闇","ÁM","Mờ tối. Lờ mờ. Đóng cửa. Buổi tối.","âm thanh 音 ở cổng 門 rất u ám 闇","アン, オ","やみ, くら",0],["泄","TIẾT, DUỆ","Chất lỏng chảy ra ngoài. Lộ ra ngoài. Tạp nhạp","ai cũng phải TIẾT (泄) ra NƯỚC (シ) trên thế GIỚI(世) này","セツ エイ","も.れる",0],["礫","LỊCH","Đá vụn, đá sỏi","Đá 礫 xếp với nhau có thể gõ thành âm nhạc 樂. Cái này có thể gọi là đàn đá石","レキ","つぶて こいし",0],["彗","TUỆ","Cái chổi. Sao chổi, Quét.","bàn tay cầm 2 cái kẹo hồ lô, đang ngắm sao thì chợt thấy SAO CHỔI bay qua","スイ エ ケイ セ イ","ほうき",0],["澱","ĐIẾN","Cặn. Lấy phấn hòa vào nước cho nó lắng đọng lại thành","(尸) (共) (殳) 氵đóng nhiều người chết cộng với binh khí chết nhiều năm dưới nước thành 澱 CẶN","デン テン","おり ど.ろ よど. み",0],["辻","TỬ","Ngã tư, băng ngang đường; góc đường","băng qua đường thập tử nhất sinh","","つじ",0],["褄","つま","váy","y phục衤 của người vợ 妻 là váy褄","","",0],["覗","TƯ","Nhìn. Đưa mắt nhìn","NHÌN見 trộm CẤP TRÊN司","シ","のぞ.く うかが. う",0],["堂","ĐƯỜNG","thực đường, thiên đường","Hoà thượng đội mũ","DOO","",0]];
+const DATA = RAW.map(([k, h, m, mem, on, kun, rad], id) => ({ id, k, h, m, mem, on, kun, rad: !!rad }));
+
+const norm = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
+const short = (w) => `${w.h} · ${w.m.split(/[,;]/)[0].trim()}`;
+
+function Readings({ w }) {
+  const row = (str, isOn, cls, label) => {
+    const items = toks(str);
+    if (!items.length) return null;
+    return (
+      <div key={label} className="flex items-start gap-2">
+        <span className="mt-1 w-8 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-stone-400">
+          {label}
+        </span>
+        <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+          {items.map((t, i) => {
+            const kana = romToKana(t, isOn);
+            return (
+              <button
+                key={label + i}
+                type="button"
+                title={`Nghe phát âm: ${kana}`}
+                onClick={(e) => { e.stopPropagation(); speak(kana); }}
+                className={cx(
+                  "rounded-lg border px-2.5 py-2 text-[11px] font-medium leading-tight transition duration-150 active:scale-[0.97]",
+                  cls
+                )}
+              >
+                {t}
+                <span className="mx-1 opacity-55">{kana}</span>
+                <span aria-hidden="true">🔊</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+  const on = row(w.on, true, "border-amber-200 bg-amber-50 text-amber-900", "On");
+  const kun = row(w.kun, false, "border-sky-200 bg-sky-50 text-sky-900", "Kun");
+  if (!on && !kun) return null;
+  return (
+    <div className="space-y-1.5">
+      {on}
+      {kun}
+    </div>
+  );
+}
+
+function KanjiSection() {
+  const [scope, setScope] = useState("kanji");
+  const [mode, setMode] = useState("list");
+  const pool = useMemo(
+    () => DATA.filter((w) => (scope === "all" ? true : scope === "rad" ? w.rad : !w.rad)),
+    [scope]
+  );
+  return (
+    <div style={JP}>
+      <PageHeader
+        title="Hán tự · Từ Hán Nhật"
+        desc="Chữ Hán, âm Hán Việt, âm On/Kun và mẹo ghi nhớ"
+        count={`${pool.length}/${DATA.length}`}
+      />
+
+      <ChipRow label="Phạm vi">
+        {[["kanji", "Hán tự"], ["rad", "Bộ thủ"], ["all", "Tất cả"]].map(([k, l]) => (
+          <Chip key={k} active={scope === k} onClick={() => setScope(k)}>
+            {l}
+            <span className={cx("ml-1.5 text-xs", scope === k ? "text-red-100" : "text-stone-400")}>
+              {k === "kanji" ? DATA.filter((w) => !w.rad).length : k === "rad" ? DATA.filter((w) => w.rad).length : DATA.length}
+            </span>
+          </Chip>
+        ))}
+      </ChipRow>
+
+      <Segmented
+        className="mb-5"
+        items={[
+          ["list", "Danh sách"],
+          ["card", "Flashcard"],
+          ["quiz", "Trắc nghiệm"],
+        ]}
+        value={mode}
+        onChange={setMode}
+      />
+
+      {mode === "list" && <ListView key={scope} pool={pool} />}
+      {mode === "card" && <CardView key={scope} pool={pool} />}
+      {mode === "quiz" && <QuizView key={scope} pool={pool} />}
+    </div>
+  );
+}
+
+function ListView({ pool }) {
+  const [q, setQ] = useState("");
+  const [hide, setHide] = useState("none");
+  const [open, setOpen] = useState({});
+  const [limit, setLimit] = useState(60);
+  const rows = useMemo(() => {
+    const n = norm(q.trim());
+    return n ? pool.filter((w) => norm(`${w.k} ${w.h} ${w.m} ${w.on} ${w.kun} ${w.mem}`).includes(n)) : pool;
+  }, [pool, q]);
+  const hidden = (w, part) => hide === part && !open[w.id];
+  return (
+    <>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <input value={q} onChange={(e) => { setQ(e.target.value); setLimit(60); }} placeholder="Tìm: chữ Hán, Hán Việt, nghĩa, âm đọc…"
+          aria-label="Tìm kiếm Hán tự"
+          className="min-w-[180px] flex-1 rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100" />
+        <select value={hide} onChange={(e) => { setHide(e.target.value); setOpen({}); }} aria-label="Chế độ ẩn"
+          className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-700">
+          <option value="none">Hiện tất cả</option>
+          <option value="vn">Ẩn Hán Việt & nghĩa</option>
+          <option value="k">Ẩn chữ Hán</option>
+        </select>
+      </div>
+      <p className="mb-2 text-xs text-stone-500">
+        {rows.length} chữ{hide !== "none" && " · bấm vào dòng để hiện đáp án"}
+      </p>
+      <Panel className="divide-y divide-stone-100 overflow-hidden">
+        {rows.slice(0, limit).map((w) => (
+          <div key={w.id} onClick={() => setOpen((o) => ({ ...o, [w.id]: !o[w.id] }))}
+            className="flex cursor-pointer gap-3 px-3.5 py-3.5 transition duration-150 hover:bg-stone-50 active:bg-stone-100 sm:px-4">
+            <div className="w-14 shrink-0 text-center sm:w-16">
+              <div className={cx("text-4xl leading-none text-stone-900 sm:text-5xl", hidden(w, "k") && "invisible")} style={JP}>
+                {w.k}
+              </div>
+              {!hidden(w, "k") && (
+                <div className="mt-2 flex justify-center">
+                  <KSpeak w={w} />
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className={hidden(w, "vn") ? "invisible" : ""}>
+                <div className="break-words text-[15px] font-bold leading-snug text-red-700">{w.h}</div>
+                <div className="mt-0.5 break-words text-sm leading-relaxed text-stone-700">{w.m}</div>
+              </div>
+              {w.mem && (
+                <div className="mt-1.5 break-words text-xs leading-relaxed text-stone-500">💡 {w.mem}</div>
+              )}
+              <div className="mt-2">
+                <Readings w={w} />
+              </div>
+            </div>
+          </div>
+        ))}
+        {rows.length === 0 && (
+          <div className="p-6 text-center text-sm text-stone-500">Không tìm thấy.</div>
+        )}
+      </Panel>
+      {rows.length > limit && (
+        <button type="button" onClick={() => setLimit(limit + 60)} className={cx(BTN.ghost, "mt-3 w-full")}>
+          Xem thêm ({rows.length - limit} chữ nữa)
+        </button>
+      )}
+    </>
+  );
+}
+
+function CardView({ pool }) {
+  const [deck, setDeck] = useState(pool);
+  const [i, setI] = useState(0);
+  const [flip, setFlip] = useState(false);
+  const [known, setKnown] = useState({});
+  const [vnFirst, setVnFirst] = useState(false);
+  const w = deck[i];
+  const [auto, setAuto] = useState(true);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    const t = kanjiSay(w);
+    if (auto && t && (vnFirst ? flip : !flip)) speak(t);
+  }, [i, flip, vnFirst, auto]);
+  const go = (d) => { setFlip(false); setI((x) => (x + d + deck.length) % deck.length); };
+  useEffect(() => {
+    const f = (e) => {
+      if (e.key === "ArrowRight") go(1);
+      else if (e.key === "ArrowLeft") go(-1);
+      else if (e.key === " " || e.key === "Enter") { e.preventDefault(); setFlip((x) => !x); }
+    };
+    window.addEventListener("keydown", f);
+    return () => window.removeEventListener("keydown", f);
+  });
+  const kanjiSide = (
+    <div className="text-center">
+      <div className="break-words text-7xl leading-tight text-stone-900 sm:text-8xl" style={JP}>{w.k}</div>
+      <div className="mt-3 flex justify-center"><KSpeak w={w} lg /></div>
+    </div>
+  );
+  const infoSide = (
+    <div className="space-y-2 px-5 text-center">
+      <div className="break-words text-2xl font-bold leading-snug text-red-700">{w.h}</div>
+      <div className="break-words text-base leading-relaxed text-stone-800 sm:text-lg">{w.m}</div>
+      <div className="flex justify-center pt-1"><Readings w={w} /></div>
+      {w.mem && <div className="break-words text-xs leading-relaxed text-stone-500">💡 {w.mem}</div>}
+    </div>
+  );
+  const front = vnFirst ? (
+    <div className="space-y-1 px-5 text-center">
+      <div className="break-words text-2xl font-bold leading-snug text-red-700">{w.h}</div>
+      <div className="break-words text-base leading-relaxed text-stone-800">{w.m}</div>
+    </div>
+  ) : kanjiSide;
+  const back = vnFirst ? (
+    <div className="space-y-3">
+      {kanjiSide}
+      <div className="flex justify-center"><Readings w={w} /></div>
+      {w.mem && <div className="break-words text-xs leading-relaxed text-stone-500">💡 {w.mem}</div>}
+    </div>
+  ) : infoSide;
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between gap-3 text-sm">
+        <span className="text-stone-600">
+          Thẻ <b className="font-semibold text-stone-900">{i + 1}</b>
+          <span className="text-stone-400">/{deck.length}</span>
+        </span>
+        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+          Đã thuộc {Object.values(known).filter(Boolean).length}
+        </span>
+      </div>
+
+      <ChipRow className="mb-3">
+        <Chip onClick={() => { setDeck(shuffle(pool)); setI(0); setFlip(false); }}>Xáo trộn</Chip>
+        <Chip onClick={() => { setVnFirst(!vnFirst); setFlip(false); }}>
+          Mặt trước: {vnFirst ? "Hán Việt" : "chữ Hán"}
+        </Chip>
+        <Chip active={auto} onClick={() => setAuto(!auto)}>Tự đọc: {auto ? "Bật" : "Tắt"}</Chip>
+      </ChipRow>
+
+      <div
+        onClick={() => setFlip(!flip)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlip(!flip); } }}
+        className={cx(
+          "flex min-h-[17rem] cursor-pointer select-none items-center justify-center rounded-2xl border-2 px-3 py-6 shadow-sm transition duration-150 sm:min-h-[20rem]",
+          flip ? "border-emerald-500 bg-emerald-50/60" : "border-stone-200 bg-white",
+          known[w.id] && "ring-2 ring-emerald-400"
+        )}
+      >
+        {flip ? back : front}
+      </div>
+      <p className="mt-2 text-center text-xs text-stone-500">
+        Chạm thẻ hoặc phím Space/Enter để lật · phím ← → để chuyển
+      </p>
+
+      <div className="mt-4">
+        <button
+          type="button"
+          onClick={() => setKnown((k) => ({ ...k, [w.id]: !k[w.id] }))}
+          className={cx(
+            "w-full rounded-xl border px-4 py-3 text-sm font-semibold transition duration-150 sm:text-base",
+            known[w.id]
+              ? "border-emerald-600 bg-emerald-600 text-white"
+              : "border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
+          )}
+        >
+          {known[w.id] ? "Đã thuộc ✓" : "Đánh dấu đã thuộc"}
+        </button>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => go(-1)} className={cx(BTN.ghost, "py-3")}>← Trước</button>
+          <button type="button" onClick={() => go(1)} className={cx(BTN.primary, "py-3 text-sm sm:text-base")}>Sau →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function makeKQ(pool, dir) {
+  const d = dir === "mix" ? (Math.random() < 0.5 ? "k2v" : "v2k") : dir;
+  const a = pool[Math.floor(Math.random() * pool.length)];
+  const others = shuffle(pool.filter((x) => x.k !== a.k && x.h !== a.h && short(x) !== short(a))).slice(0, 3);
+  return { a, opts: shuffle([a, ...others]), dir: d };
+}
+
+function QuizView({ pool }) {
+  const [dir, setDir] = useState("k2v");
+  const [q, setQ] = useState(() => makeKQ(pool, "k2v"));
+  const [sel, setSel] = useState(null);
+  const [sc, setSc] = useState({ ok: 0, n: 0 });
+  const k2v = q.dir === "k2v";
+  const next = (d = dir) => { setQ(makeKQ(pool, d)); setSel(null); };
+  const choose = (o) => {
+    if (sel) return;
+    setSel(o);
+    setSc((s) => ({ ok: s.ok + (o.id === q.a.id ? 1 : 0), n: s.n + 1 }));
+    const t = kanjiSay(q.a);
+    if (t) speak(t);
+  };
+  useEffect(() => {
+    const f = (e) => {
+      if (e.key === "Enter" && sel) next();
+      else if (/^[1-4]$/.test(e.key) && !sel) choose(q.opts[+e.key - 1]);
+    };
+    window.addEventListener("keydown", f);
+    return () => window.removeEventListener("keydown", f);
+  });
+  if (pool.length < 8)
+    return (
+      <Panel className="p-4 text-sm text-stone-600">
+        Cần thêm chữ để làm trắc nghiệm — hãy chọn phạm vi “Tất cả”.
+      </Panel>
+    );
+  const right = sel && sel.id === q.a.id;
+  return (
+    <div>
+      <ProgressHeader ok={sc.ok} n={sc.n} />
+
+      <ChipRow className="mb-3">
+        {[["k2v", "Chữ → Hán Việt"], ["v2k", "Hán Việt → Chữ"], ["mix", "Trộn cả hai"]].map(([d, l]) => (
+          <Chip key={d} active={dir === d} onClick={() => { setDir(d); next(d); }}>
+            {l}
+          </Chip>
+        ))}
+      </ChipRow>
+
+      <Panel className="mb-3 px-4 py-6 text-center">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+          {k2v ? "Chữ Hán này nghĩa là…" : "Từ nào là…"}
+        </div>
+        {k2v ? (
+          <div className="mt-2 break-words text-7xl leading-tight text-stone-900 sm:text-8xl" style={JP}>
+            {q.a.k}
+          </div>
+        ) : (
+          <div className="mt-2">
+            <div className="break-words text-xl font-bold leading-snug text-red-700 sm:text-2xl">{q.a.h}</div>
+            <div className="mt-1 break-words text-base leading-relaxed text-stone-800 sm:text-lg">{q.a.m}</div>
+          </div>
+        )}
+        {sel && (
+          <div className="mt-4 space-y-2 border-t border-stone-100 pt-3 text-left">
+            <Readings w={q.a} />
+            {q.a.mem && <div className="break-words text-xs leading-relaxed text-stone-500">💡 {q.a.mem}</div>}
+          </div>
+        )}
+      </Panel>
+
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        {q.opts.map((o, i) => {
+          const isRight = o.id === q.a.id;
+          let cls = "border-stone-200 bg-white text-stone-900 hover:border-stone-300 hover:bg-stone-50";
+          if (sel) {
+            if (isRight) cls = "border-emerald-500 bg-emerald-50 text-emerald-800";
+            else if (sel.id === o.id) cls = "border-red-400 bg-red-50 text-red-800";
+            else cls = "border-stone-200 bg-white text-stone-900 opacity-55";
+          }
+          return (
+            <button
+              key={o.id}
+              type="button"
+              disabled={!!sel}
+              onClick={() => choose(o)}
+              className={cx(
+                "flex min-h-[56px] w-full items-start gap-2 rounded-xl border px-3 py-3 text-left transition duration-150 active:scale-[0.99]",
+                cls
+              )}
+            >
+              <span className="mt-0.5 text-xs font-semibold text-stone-400">{i + 1}</span>
+              <span className="min-w-0 flex-1">
+                {k2v ? (
+                  <span className="break-words text-sm leading-snug sm:text-base">{short(o)}</span>
+                ) : (
+                  <span className="block break-words text-3xl leading-none sm:text-4xl" style={JP}>{o.k}</span>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {sel && (
+        <Feedback
+          ok={right}
+          footer={
+            <button type="button" onClick={() => next()} className={cx(BTN.primary, "mt-3")}>
+              Câu tiếp theo → (Enter)
+            </button>
+          }
+        >
+          {right ? (
+            <>Chính xác — <b>{short(q.a)}</b></>
+          ) : (
+            <>Chưa đúng — đáp án đúng: <b>{short(q.a)}</b></>
+          )}
+        </Feedback>
+      )}
+    </div>
+  );
+}
+
+// ================= SỐ ĐẾM =================
+const D = ["", "いち", "に", "さん", "よん", "ご", "ろく", "なな", "はち", "きゅう"];
+const KD = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
+const dig = (n) => (n === 10 ? "じゅう" : D[n]);
+const fmt = (n) => n.toLocaleString("en-US");
+
+function grp(n, big) {
+  const th = Math.floor(n / 1000), h = Math.floor(n / 100) % 10, t = Math.floor(n / 10) % 10, o = n % 10;
+  let k = "", r = "";
+  if (th) { k += th === 1 ? (big ? "一千" : "千") : KD[th] + "千"; r += th === 1 ? (big ? "いっせん" : "せん") : th === 3 ? "さんぜん" : th === 8 ? "はっせん" : D[th] + "せん"; }
+  if (h) { k += h === 1 ? "百" : KD[h] + "百"; r += h === 1 ? "ひゃく" : h === 3 ? "さんびゃく" : h === 6 ? "ろっぴゃく" : h === 8 ? "はっぴゃく" : D[h] + "ひゃく"; }
+  if (t) { k += t === 1 ? "十" : KD[t] + "十"; r += t === 1 ? "じゅう" : D[t] + "じゅう"; }
+  if (o) { k += KD[o]; r += D[o]; }
+  return [k, r];
+}
+function readNum(n) {
+  if (n === 0) return ["〇", "ゼロ"];
+  const parts = [[Math.floor(n / 1e8) % 1e4, "億", "おく"], [Math.floor(n / 1e4) % 1e4, "万", "まん"], [n % 1e4, "", ""]];
+  let k = "", r = "";
+  for (const [v, ks, rs] of parts) {
+    if (!v) continue;
+    const [gk, gr] = grp(v, !!ks);
+    k += (ks && v === 1 ? "一" : gk) + ks;
+    r += (ks && v === 1 ? "いち" : gr) + rs;
+  }
+  return [k, r];
+}
+
+const PRE = { 1: "いっ", 6: "ろっ", 8: "はっ", 10: "じゅっ" };
+const HV = { ほ: ["ぽ", "ぼ"], ひ: ["ぴ", "び"], は: ["ぱ", "ば"] };
+const COUNTERS = [
+  { n: "人", note: "người", sp: ["ひとり", "ふたり", "さんにん", "よにん", "ごにん", "ろくにん", "ななにん", "はちにん", "きゅうにん", "じゅうにん"] },
+  { n: "つ", note: "đồ vật nói chung", sp: ["ひとつ", "ふたつ", "みっつ", "よっつ", "いつつ", "むっつ", "ななつ", "やっつ", "ここのつ", "とお"] },
+  { n: "個", r: "こ", rule: "k", note: "vật nhỏ, tròn" },
+  { n: "枚", r: "まい", rule: "n", note: "vật mỏng, phẳng (giấy, áo, vé)" },
+  { n: "本", r: "ほん", rule: "h", note: "vật dài (bút, chai, cây)" },
+  { n: "匹", r: "ひき", rule: "h", note: "động vật nhỏ (chó, mèo, cá)" },
+  { n: "杯", r: "はい", rule: "h", note: "cốc, chén (nước, cà phê)" },
+  { n: "冊", r: "さつ", rule: "s", note: "sách, vở" },
+  { n: "台", r: "だい", rule: "n", note: "máy móc, xe" },
+  { n: "階", r: "かい", rule: "kai", note: "tầng nhà" },
+  { n: "回", r: "かい", rule: "k", note: "số lần" },
+  { n: "歳", r: "さい", rule: "s", note: "tuổi (20 tuổi: はたち)" },
+];
+function counter(c, n) {
+  if (c.sp) return c.sp[n - 1];
+  const b = c.r;
+  if (c.rule === "h") {
+    const [p, v] = HV[b[0]];
+    if ([1, 6, 8, 10].includes(n)) return PRE[n] + p + b.slice(1);
+    return n === 3 ? "さん" + v + b.slice(1) : dig(n) + b;
+  }
+  if (c.rule === "k") return PRE[n] ? PRE[n] + b : dig(n) + b;
+  if (c.rule === "s") return [1, 8, 10].includes(n) ? PRE[n] + b : dig(n) + b;
+  if (c.rule === "kai") return n === 3 ? "さんがい" : PRE[n] ? PRE[n] + b : dig(n) + b;
+  return dig(n) + b;
+}
+
+const DAYS = { 1: "ついたち", 2: "ふつか", 3: "みっか", 4: "よっか", 5: "いつか", 6: "むいか", 7: "なのか", 8: "ようか", 9: "ここのか", 10: "とおか", 14: "じゅうよっか", 20: "はつか", 24: "にじゅうよっか" };
+const dayR = (n) => {
+  if (DAYS[n]) return DAYS[n];
+  const t = Math.floor(n / 10), o = n % 10;
+  return (t ? (t === 1 ? "じゅう" : D[t] + "じゅう") : "") + (o ? { 7: "しち", 9: "く" }[o] || D[o] : "") + "にち";
+};
+const monthR = (n) => ({ 4: "し", 7: "しち", 9: "く" }[n] || (n <= 10 ? dig(n) : "じゅう" + D[n - 10])) + "がつ";
+const hourR = (n) => ({ 4: "よ", 7: "しち", 9: "く" }[n] || (n <= 10 ? dig(n) : n === 11 ? "じゅういち" : "じゅうに")) + "じ";
+const MIN = { 1: "いっぷん", 2: "にふん", 3: "さんぷん", 4: "よんぷん", 5: "ごふん", 6: "ろっぷん", 7: "ななふん", 8: "はっぷん", 9: "きゅうふん" };
+const minR = (n) => {
+  const t = Math.floor(n / 10), o = n % 10;
+  if (!o) return n === 10 ? "じゅっぷん" : D[t] + "じゅっぷん";
+  return (t ? (t === 1 ? "じゅう" : D[t] + "じゅう") : "") + MIN[o];
+};
+
+const sayJp = (jp) => speak(jp.split("/")[0].trim());
+function Say({ jp, sub, hl }) {
+  return (
+    <button
+      type="button"
+      onClick={() => sayJp(jp)}
+      className={cx(
+        "flex min-h-[52px] w-full flex-col items-center justify-center gap-0.5 rounded-xl border px-1.5 py-2 text-center shadow-sm transition duration-150 active:scale-[0.97]",
+        hl ? "border-amber-300 bg-amber-50" : "border-stone-200 bg-white hover:border-red-200 hover:bg-red-50/50"
+      )}
+    >
+      <span className="break-words text-[13px] font-medium leading-tight text-stone-900 sm:text-sm">{jp}</span>
+      {sub && <span className="break-words text-[11px] leading-tight text-stone-500">{sub}</span>}
+    </button>
+  );
+}
+function Block({ title, note, children }) {
+  return (
+    <section className="mb-6">
+      <h2 className="text-sm font-semibold text-stone-800">{title}</h2>
+      {note && <p className="mt-0.5 mb-2 text-xs leading-relaxed text-stone-500">{note}</p>}
+      <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function NumBasic() {
+  const small = [["0", "〇", "ゼロ / れい"], ["1", "一", "いち"], ["2", "二", "に"], ["3", "三", "さん"], ["4", "四", "よん / し"], ["5", "五", "ご"], ["6", "六", "ろく"], ["7", "七", "なな / しち"], ["8", "八", "はち"], ["9", "九", "きゅう / く"], ["10", "十", "じゅう"]];
+  const IRR = [300, 600, 800, 3000, 8000];
+  const nums = [20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 100000, 1000000, 10000000, 100000000];
+  return (
+    <div>
+      <p className="text-xs text-stone-500 mb-4">Bấm vào ô để nghe. Ô vàng là cách đọc biến âm cần nhớ.</p>
+      <Block title="0 – 10" note="4, 7, 9 có hai cách đọc: dùng よん・なな・きゅう khi đếm số, し・しち・く trong một số từ cố định (4月, 7月, 9月, 4時, 9時…).">
+        {small.map(([n, k, r]) => <Say key={n} jp={r} sub={`${n} · ${k}`} hl={["4", "7", "9"].includes(n)} />)}
+      </Block>
+      <Block title="Chục, trăm, nghìn, vạn…" note="Đọc theo nhóm 4 chữ số: 万 (10⁴) và 億 (10⁸). 一万 luôn đọc いちまん, còn 100 và 1000 thì không cần いち.">
+        {nums.map((n) => <Say key={n} jp={readNum(n)[1]} sub={`${fmt(n)} · ${readNum(n)[0]}`} hl={IRR.includes(n)} />)}
+      </Block>
+    </div>
+  );
+}
+
+function NumTool() {
+  const [v, setV] = useState("12345");
+  const n = parseInt(v || "0", 10);
+  const [k, r] = readNum(n);
+  return (
+    <div>
+      <input value={v} inputMode="numeric" onChange={(e) => setV(e.target.value.replace(/\D/g, "").slice(0, 11))}
+        aria-label="Nhập số"
+        placeholder="Nhập một số (tối đa 11 chữ số)…"
+        className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3.5 text-center text-2xl text-stone-900 placeholder:text-sm placeholder:text-stone-400 focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100" />
+      <div className="my-3 flex flex-wrap gap-2">
+        {[7, 25, 300, 4000, 10000, 85000, 600800, 123456789].map((x) => (
+          <Chip key={x} onClick={() => setV(String(x))}>{fmt(x)}</Chip>
+        ))}
+      </div>
+      <Panel className="px-4 py-6 text-center">
+        <div className="text-sm text-stone-500">{fmt(n)}</div>
+        <div className="mt-1 break-all text-3xl font-bold text-stone-900">{k}</div>
+        <div className="mt-2 break-all text-xl font-medium text-red-700">{r}</div>
+        <div className="mt-4 flex justify-center">
+          <button type="button" onClick={() => sayJp(r)} aria-label="Nghe"
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-stone-300 bg-white text-2xl transition duration-150 hover:border-red-200 hover:bg-red-50 active:scale-95">
+            🔊
+          </button>
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+function NumDate() {
+  return (
+    <div>
+      <Block title="Tháng (月)" note="4月 しがつ, 7月 しちがつ, 9月 くがつ là ba tháng đặc biệt.">
+        {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <Say key={n} jp={monthR(n)} sub={`${n}月`} hl={[4, 7, 9].includes(n)} />)}
+      </Block>
+      <Block title="Ngày (日)" note="Ngày 1–10, 14, 20, 24 đọc riêng. Các ngày khác đọc số + にち (17 và 27 đọc しち, 19 và 29 đọc く).">
+        {Array.from({ length: 31 }, (_, i) => i + 1).map((n) => <Say key={n} jp={dayR(n)} sub={`${n}日`} hl={!!DAYS[n]} />)}
+      </Block>
+    </div>
+  );
+}
+
+function NumTime() {
+  return (
+    <div>
+      <Block title="Giờ (時)" note="4時 よじ, 7時 しちじ, 9時 くじ là ba giờ đặc biệt.">
+        {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <Say key={n} jp={hourR(n)} sub={`${n}時`} hl={[4, 7, 9].includes(n)} />)}
+      </Block>
+      <Block title="Phút (分)" note="Đuôi đổi giữa ふん và ぷん. 30 phút còn nói là 半 (はん).">
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30, 45].map((n) => <Say key={n} jp={minR(n)} sub={`${n}分`} hl={[0, 1, 3, 4, 6, 8].includes(n % 10)} />)}
+      </Block>
+      <Block title="Tuổi (歳)" note="1, 8, 10 tuổi có っ. 20 tuổi đọc はたち.">
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => <Say key={n} jp={counter(COUNTERS[11], n)} sub={`${n}歳`} hl={[1, 8, 10].includes(n)} />)}
+        <Say jp="はたち" sub="20歳" hl />
+      </Block>
+    </div>
+  );
+}
+
+function NumCounters() {
+  return (
+    <div>
+      <p className="mb-3 text-xs leading-relaxed text-stone-500">
+        Bấm vào ô để nghe. Ô vàng là cách đọc biến âm (1, 3, 6, 8, 10 hay bị đổi). Bảng cuộn ngang để xem hết 10 cột.
+      </p>
+      <Panel className="overflow-x-auto">
+        <table className="w-full min-w-full text-sm">
+          <thead>
+            <tr className="text-xs text-stone-500">
+              <th className="sticky left-0 z-10 border-r border-stone-200 bg-white p-2 text-left">Đếm</th>
+              {Array.from({ length: 10 }, (_, i) => <th key={i} className="p-2 font-medium">{i + 1}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {COUNTERS.map((c) => (
+              <tr key={c.n} className="border-t border-stone-100">
+                <td className="sticky left-0 z-10 border-r border-stone-200 bg-white p-2 align-top">
+                  <div className="text-xl font-bold" style={JP}>{c.n}</div>
+                  <div className="w-28 text-xs leading-snug text-stone-500">{c.note}</div>
+                </td>
+                {Array.from({ length: 10 }, (_, i) => {
+                  const n = i + 1, t = counter(c, n);
+                  const hl = c.sp ? (c.n === "つ" || n <= 2 || n === 4) : t !== dig(n) + c.r;
+                  return (
+                    <td key={n} className="p-1">
+                      <button type="button" onClick={() => sayJp(t)}
+                        className={cx(
+                          "w-full whitespace-nowrap rounded-lg border px-2 py-2 text-center transition duration-150 active:scale-95",
+                          hl ? "border-amber-300 bg-amber-50 text-amber-900" : "border-stone-200 bg-white hover:border-red-200 hover:bg-red-50"
+                        )}
+                        style={JP}>
+                        {t}
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+    </div>
+  );
+}
+
+function makeNQ(max, mode) {
+  const L = String(max).length;
+  const len = 1 + Math.floor(Math.random() * L);
+  const lo = len === 1 ? 1 : 10 ** (len - 1);
+  const hi = Math.min(10 ** len - 1, max);
+  const n = lo + Math.floor(Math.random() * (hi - lo + 1));
+  const reads = new Set([readNum(n)[1]]);
+  const opts = [n];
+  let guard = 0;
+  while (opts.length < 4 && guard++ < 80) {
+    const s = String(n).split("");
+    s[Math.floor(Math.random() * s.length)] = String(Math.floor(Math.random() * 10));
+    const m = parseInt(s.join(""), 10);
+    if (m > 0 && m <= max && !reads.has(readNum(m)[1])) { opts.push(m); reads.add(readNum(m)[1]); }
+  }
+  return { n, mode: mode === "mix" ? pick(["read", "hear"]) : mode, opts: shuffle(opts) };
+}
+
+function NumQuiz() {
+  const [mode, setMode] = useState("read");
+  const [max, setMax] = useState(999);
+  const [q, setQ] = useState(() => makeNQ(999, "read"));
+  const [sel, setSel] = useState(null);
+  const [sc, setSc] = useState({ ok: 0, n: 0 });
+  const next = (m = mode, x = max) => { setQ(makeNQ(x, m)); setSel(null); };
+  const choose = (o) => {
+    if (sel !== null) return;
+    setSel(o);
+    setSc((s) => ({ ok: s.ok + (o === q.n ? 1 : 0), n: s.n + 1 }));
+    sayJp(readNum(q.n)[1]);
+  };
+  useEffect(() => { if (q.mode === "hear") sayJp(readNum(q.n)[1]); }, [q]);
+  useEffect(() => {
+    const f = (e) => {
+      if (e.key === "Enter" && sel !== null) next();
+      else if (/^[1-4]$/.test(e.key) && sel === null && q.opts[+e.key - 1] !== undefined) choose(q.opts[+e.key - 1]);
+    };
+    window.addEventListener("keydown", f);
+    return () => window.removeEventListener("keydown", f);
+  });
+  const [k, r] = readNum(q.n);
+  const hear = q.mode === "hear";
+  return (
+    <div>
+      <ProgressHeader ok={sc.ok} n={sc.n} />
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="min-w-[220px] flex-1">
+          <Segmented
+            items={[
+              ["read", "Số → Cách đọc"],
+              ["hear", "Nghe → Số"],
+              ["mix", "Trộn"],
+            ]}
+            value={mode}
+            onChange={(m) => { setMode(m); next(m); }}
+          />
+        </div>
+        <select
+          value={max}
+          aria-label="Phạm vi số"
+          onChange={(e) => { setMax(+e.target.value); next(mode, +e.target.value); }}
+          className="min-h-10 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-700"
+        >
+          <option value={99}>đến 99</option>
+          <option value={999}>đến 999</option>
+          <option value={9999}>đến 9.999</option>
+          <option value={99999999}>đến 99.999.999</option>
+        </select>
+      </div>
+
+      <Panel className="mb-3 px-4 py-6 text-center">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+          {hear ? "Nghe và chọn số" : "Số này đọc thế nào…"}
+        </div>
+        {hear ? (
+          <div className="mt-3 flex justify-center">
+            <button
+              type="button"
+              onClick={() => sayJp(r)}
+              aria-label="Nghe lại"
+              className="flex h-16 w-16 items-center justify-center rounded-full border border-stone-300 bg-white text-3xl shadow-sm transition duration-150 hover:border-red-200 hover:bg-red-50 active:scale-95"
+            >
+              🔊
+            </button>
+          </div>
+        ) : (
+          <div className="mt-2 break-words text-5xl font-bold leading-tight text-stone-900 sm:text-6xl">{fmt(q.n)}</div>
+        )}
+        {sel !== null && (
+          <div className="mt-4 space-y-1 border-t border-stone-100 pt-3">
+            <div className="break-words text-xl font-semibold text-stone-800">{k}</div>
+            <div className="break-words text-lg font-medium text-red-700">{r}</div>
+          </div>
+        )}
+      </Panel>
+
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        {q.opts.map((o, i) => {
+          const isRight = o === q.n;
+          let cls = "border-stone-200 bg-white text-stone-900 hover:border-stone-300 hover:bg-stone-50";
+          if (sel !== null) {
+            if (isRight) cls = "border-emerald-500 bg-emerald-50 text-emerald-800";
+            else if (o === sel) cls = "border-red-400 bg-red-50 text-red-800";
+            else cls = "border-stone-200 bg-white text-stone-900 opacity-55";
+          }
+          return (
+            <button
+              key={o}
+              type="button"
+              disabled={sel !== null}
+              onClick={() => choose(o)}
+              className={cx(BTN.answer, cls)}
+            >
+              <span className="w-full">
+                <span className="mr-1.5 text-xs font-semibold text-stone-400">{i + 1}</span>
+                <span className={hear ? "text-xl sm:text-2xl" : "text-base sm:text-lg"}>
+                  {hear ? fmt(o) : readNum(o)[1]}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {sel !== null && (
+        <Feedback
+          ok={sel === q.n}
+          footer={
+            <button type="button" onClick={() => next()} className={cx(BTN.primary, "mt-3")}>
+              Câu tiếp theo → (Enter)
+            </button>
+          }
+        >
+          {sel === q.n ? (
+            <>Chính xác — <b>{r}</b></>
+          ) : (
+            <>Chưa đúng — đáp án đúng: <b>{r}</b></>
+          )}
+        </Feedback>
+      )}
+    </div>
+  );
+}
+
+function NumSection() {
+  const TABS = [["basic", "Số cơ bản"], ["tool", "Máy đọc số"], ["date", "Ngày tháng"], ["time", "Giờ & tuổi"], ["count", "Đếm đồ vật"], ["quiz", "Luyện tập"]];
+  const [t, setT] = useState("basic");
+  return (
+    <div style={JP}>
+      <PageHeader
+        title="Cách đọc số trong tiếng Nhật"
+        desc="Số đếm, số lớn, ngày tháng, giờ, tuổi và lượng từ"
+        count={`${TABS.length} phần`}
+      />
+      <ChipRow label="Chọn phần học" className="mb-5">
+        {TABS.map(([k, l]) => (
+          <Chip key={k} active={t === k} onClick={() => setT(k)}>{l}</Chip>
+        ))}
+      </ChipRow>
+      {t === "basic" && <NumBasic />}
+      {t === "tool" && <NumTool />}
+      {t === "date" && <NumDate />}
+      {t === "time" && <NumTime />}
+      {t === "count" && <NumCounters />}
+      {t === "quiz" && <NumQuiz />}
+    </div>
+  );
+}
+
+// ================= TỪ VỰNG N5 =================
+// Định dạng mỗi dòng: kanji|hiragana/katakana|nghĩa tiếng Việt
+const VRAW = {
+  "Danh từ": `朝|あさ|buổi sáng
+朝ご飯|あさごはん|bữa ăn sáng
+|あさって|ngày kia
+足|あし|chân
+明日|あした|ngày mai
+|これ|cái này
+|それ|cái đó
+|あれ|cái kia
+|ここ|chỗ này
+|そこ|chỗ đó
+|あそこ|chỗ kia, đằng kia
+|こちら|phía này
+|そちら|phía đó
+|あちら|phía kia
+春|はる|mùa xuân
+夏|なつ|mùa hạ
+秋|あき|mùa thu
+冬|ふゆ|mùa đông
+頭|あたま|đầu
+|あなた|bạn
+兄|あに|anh trai (mình)
+姉|あね|chị gái (mình)
+|アパート|căn hộ
+雨|あめ|mưa
+飴|あめ|kẹo (ngậm)
+家|いえ|nhà
+池|いけ|cái ao
+医者|いしゃ|bác sĩ
+椅子|いす|ghế
+一|いち|một
+一日|いちにち, ついたち|một ngày, ngày mồng 1
+二日|ふつか|2 ngày, ngày mồng 2
+三日|みっか|3 ngày, ngày mồng 3
+四日|よっか|4 ngày, ngày mồng 4
+五日|いつか|5 ngày, ngày mồng 5
+六日|むいか|6 ngày, ngày mồng 6
+七日|なのか|7 ngày, ngày mồng 7
+八日|ようか|8 ngày, ngày mồng 8
+九日|ここのか|9 ngày, ngày mồng 9
+十日|とおか|10 ngày, ngày mồng 10
+五つ|いつつ|năm cái (đếm đồ vật nói chung)
+犬|いぬ|con chó
+今|いま|bây giờ
+意味|いみ|ý nghĩa
+妹|いもうと|em gái (mình)
+入口|いりぐち|lối vào
+色|いろ|màu
+上|うえ|trên
+後ろ|うしろ|đằng sau
+歌|うた|bài hát
+海|うみ|biển
+上着|うわぎ|áo khoác
+絵|え|bức tranh
+映画|えいが|phim (điện ảnh)
+映画館|えいがかん|rạp chiếu phim
+英語|えいご|tiếng Anh
+駅|えき|nhà ga
+|エレベーター|thang máy
+鉛筆|えんぴつ|bút chì
+大勢|おおぜい|nhiều (người)
+お母さん|おかあさん|mẹ (người khác)
+お菓子|おかし|bánh, kẹo
+お金|おかね|tiền
+奥さん|おくさん|vợ (người khác)
+お酒|おさけ|rượu
+お皿|おさら|cái đĩa
+|おじいさん|ông (nội, ngoại), ông già
+|おじさん|chú, bác (đàn ông trung niên)
+お茶|おちゃ|trà
+お手洗い|おてあらい|nhà vệ sinh
+お父さん|おとうさん|bố (người khác)
+弟|おとうと|em trai (mình)
+男|おとこ|nam giới, con trai
+男の子|おとこのこ|bé trai
+一昨日|おととい|hôm kia
+一昨年|おととし|năm kia
+大人|おとな|người lớn
+|おなか|bụng
+同じ|おなじ|giống nhau
+お兄さん|おにいさん|anh trai (người khác)
+お姉さん|おねえさん|chị gái (người khác)
+|おばあさん|bà (nội, ngoại), bà già
+|おばさん|cô, dì
+お風呂|おふろ|bồn tắm
+お弁当|おべんとう|cơm hộp
+|おまわりさん|cảnh sát
+音楽|おんがく|âm nhạc
+女の子|おんなのこ|bé gái
+外国|がいこく|nước ngoài
+外国人|がいこくじん|người nước ngoài
+会社|かいしゃ|công ty
+階段|かいだん|cầu thang
+買い物|かいもの|mua sắm
+|かぎ|chìa khóa
+学生|がくせい|học sinh, sinh viên
+傘|かさ|cái ô
+風|かぜ|gió
+風邪|かぜ|cảm, cúm
+家族|かぞく|gia đình
+方|かた|vị, người (lịch sự của 人); cách (làm gì)
+学校|がっこう|trường học
+|カップ|cốc (có tay cầm)
+|コップ|cốc (không quai)
+家庭|かてい|gia đình
+角|かど|góc (bàn, cua, quẹo)
+|かばん|cặp, túi sách
+花瓶|かびん|bình hoa, lọ hoa
+紙|かみ|giấy
+|カメラ|máy ảnh
+火曜日|かようび|thứ ba
+|カレー|cà ri
+|カレンダー|tờ lịch
+川|かわ|sông
+漢字|かんじ|chữ Hán
+木|き|cây, gỗ
+黄色|きいろ|màu vàng
+北|きた|phía Bắc
+|ギター|guitar
+喫茶店|きっさてん|quán giải khát
+切手|きって|tem
+切符|きっぷ|vé (tàu, xe)
+昨日|きのう|hôm qua
+牛肉|ぎゅうにく|thịt bò
+牛乳|ぎゅうにゅう|sữa (bò)
+今日|きょう|hôm nay
+教室|きょうしつ|phòng học, lớp học
+兄弟|きょうだい|anh chị em
+去年|きょねん|năm ngoái
+|キロ/キログラム|kg
+|キロ/キロメートル|km
+銀行|ぎんこう|ngân hàng
+金曜日|きんようび|thứ sáu
+薬|くすり|thuốc
+果物|くだもの|hoa quả, trái cây
+口|くち|miệng
+靴|くつ|giày dép
+靴下|くつした|cái tất
+国|くに|đất nước
+曇り|くもり|có mây, nhiều mây
+|クラス|lớp học
+|グラム|gram
+車|くるま|xe hơi, xe
+黒|くろ|đen, màu đen
+警官|けいかん|cảnh sát
+今朝|けさ|sáng nay
+結婚|けっこん|kết hôn
+月曜日|げつようび|thứ hai
+玄関|げんかん|lối đi vào
+公園|こうえん|công viên
+交差点|こうさてん|ngã tư
+紅茶|こうちゃ|trà đen
+交番|こうばん|bốt, trạm cảnh sát
+声|こえ|tiếng, giọng nói
+|コート|áo khoác
+|コーヒー|cà phê
+午後|ごご|buổi chiều
+九つ|ここのつ|9 cái (vật nói chung)
+午前|ごぜん|buổi sáng (AM)
+|こっち|phía này (thân mật của こちら)
+今年|ことし|năm nay
+言葉|ことば|từ, từ vựng
+子供|こども|trẻ em, con cái
+御飯|ごはん|cơm, bữa ăn
+今月|こんげつ|tháng này
+今週|こんしゅう|tuần này
+|こんな|như thế này
+今晩|こんばん|tối nay
+財布|さいふ|cái ví
+魚|さかな|cá
+作文|さくぶん|làm văn
+雑誌|ざっし|tạp chí
+砂糖|さとう|đường
+再来年|さらいねん|năm sau nữa
+三|さん|ba
+四|し / よん|bốn
+塩|しお|muối
+時間|じかん|thời gian
+仕事|しごと|công việc
+辞書|じしょ|từ điển
+下|した|dưới
+七|しち / なな|bảy
+質問|しつもん|câu hỏi
+自転車|じてんしゃ|xe đạp
+自動車|じどうしゃ|ô tô, xe hơi
+自分|じぶん|bản thân, tự mình
+写真|しゃしん|ảnh
+|シャツ|áo sơ mi
+|シャワー|vòi hoa sen
+十|じゅう|mười
+授業|じゅぎょう|giờ học
+宿題|しゅくだい|bài tập về nhà
+|しょうゆ|xì dầu
+食堂|しょくどう|phòng ăn, nhà ăn
+新聞|しんぶん|báo
+水曜日|すいようび|thứ tư
+|スカート|váy ngắn
+|ストーブ|lò sưởi
+|スプーン|cái thìa
+|スポーツ|thể thao
+|ズボン|quần
+背|せ|lưng
+生徒|せいと|học sinh
+|セーター|áo len
+|せっけん|xà bông
+|ゼロ|số 0
+千|せん|nghìn
+先月|せんげつ|tháng trước
+先週|せんしゅう|tuần trước
+先生|せんせい|giáo viên, bác sĩ
+洗濯|せんたく|việc giặt giũ
+掃除|そうじ|dọn dẹp
+外|そと|ngoài
+|そば|gần, bên cạnh
+空|そら|bầu trời
+大学|だいがく|đại học
+大使館|たいしかん|đại sứ quán
+台所|だいどころ|nhà bếp
+|タクシー|xe taxi
+建物|たてもの|tòa nhà
+食べ物|たべもの|đồ ăn
+卵|たまご|trứng
+誕生日|たんじょうび|sinh nhật
+地下鉄|ちかてつ|tàu điện ngầm
+地図|ちず|bản đồ
+茶色|ちゃいろ|màu nâu (màu trà)
+|ちゃわん|cái bát
+机|つくえ|bàn
+手|て|tay
+|テーブル|cái bàn
+|テープレコーダー|máy ghi âm
+手紙|てがみ|thư
+出口|でぐち|cửa ra, lối ra
+|テスト|kiểm tra
+|デパート|cửa hàng bách hóa
+|テレビ|tivi
+天気|てんき|thời tiết
+電気|でんき|điện, đèn điện
+電車|でんしゃ|tàu điện
+電話|でんわ|điện thoại
+戸|と|cửa
+|ドア|cửa
+|トイレ|nhà vệ sinh
+所|ところ|nơi, chỗ
+年|とし|năm
+図書館|としょかん|thư viện
+動物|どうぶつ|động vật
+時々|ときどき|thỉnh thoảng
+時計|とけい|đồng hồ
+隣|となり|bên cạnh
+友達|ともだち|bạn bè
+土曜日|どようび|thứ bảy
+鳥|とり|con chim
+とり肉|とりにく|thịt gà
+|ナイフ|dao
+中|なか|trong
+夏休み|なつやすみ|kỳ nghỉ hè
+七つ|ななつ|bảy cái (đếm vật nói chung)
+名前|なまえ|tên
+二|に|hai
+肉|にく|thịt
+西|にし|phía Tây
+日曜日|にちようび|chủ nhật
+荷物|にもつ|hành lý, đồ đạc
+|ニュース|tin tức
+庭|にわ|vườn
+|ネクタイ|cà vạt
+猫|ねこ|mèo
+飲み物|のみもの|đồ uống
+歯|は|răng
+|パーティー|tiệc
+灰皿|はいざら|gạt tàn thuốc
+葉書|はがき|bưu thiếp
+箱|はこ|cái hộp
+橋|はし|cầu
+箸|はし|đũa
+|バス|xe buýt
+|バター|bơ
+二十歳|はたち, にじゅっさい|20 tuổi
+八|はち|tám
+二十日|はつか|ngày 20, 20 ngày
+花|はな|hoa
+鼻|はな|mũi
+話|はなし|câu chuyện
+半|はん|một nửa
+晩|ばん|buổi tối
+|パン|bánh mì
+|ハンカチ|khăn tay
+番号|ばんごう|số
+晩御飯|ばんごはん|bữa ăn tối
+半分|はんぶん|một nửa
+東|ひがし|phía Đông
+飛行機|ひこうき|máy bay
+左|ひだり|phía bên tay trái
+人|ひと|người
+一つ|ひとつ|một cái (đếm vật nói chung)
+一月|いちがつ|tháng 1
+一人|ひとり|một người
+百|ひゃく|trăm
+病院|びょういん|bệnh viện
+病気|びょうき|bệnh
+昼|ひる|buổi trưa, ban ngày
+昼ご飯|ひるごはん|ăn trưa
+|フィルム|cuộn phim
+封筒|ふうとう|phong bì
+|プール|hồ bơi
+|フォーク|dĩa
+服|ふく|quần áo
+二つ|ふたつ|hai cái (đếm vật nói chung)
+豚肉|ぶたにく|thịt lợn
+二人|ふたり|hai người
+文章|ぶんしょう|câu văn, đoạn văn
+|ページ|trang
+|ベッド|cái giường
+|ペット|thú cưng
+部屋|へや|căn phòng
+辺|へん|khu vực
+|ペン|bút
+帽子|ぼうし|mũ
+|ボールペン|bút bi
+|ポケット|túi (áo, quần)
+|ボタン|nút
+|ホテル|khách sạn
+本|ほん|cuốn sách
+本棚|ほんだな|giá sách
+本当|ほんとう|sự thật
+毎朝|まいあさ|mỗi buổi sáng
+毎月|まいげつ/まいつき|mỗi tháng
+毎週|まいしゅう|mỗi tuần
+毎日|まいにち|mỗi ngày
+毎年|まいねん/まいとし|mỗi năm
+毎晩|まいばん|mỗi tối
+前|まえ|trước
+町|まち|thị xã, thành phố
+窓|まど|cửa sổ
+万|まん|vạn (mười nghìn)
+万年筆|まんねんひつ|bút mực
+右|みぎ|bên phải
+水|みず|nước
+店|みせ|cửa hàng, cửa tiệm
+道|みち|đường phố
+三つ|みっつ|ba cái (đếm đồ vật nói chung)
+緑|みどり|màu xanh lá cây
+皆さん|みなさん|tất cả mọi người
+南|みなみ|phía Nam
+耳|みみ|tai
+|みんな|tất cả
+向こう|むこう|phía bên kia
+六つ|むっつ|sáu cái (đếm đồ vật nói chung)
+村|むら|làng
+目|め|mắt
+|メートル|mét
+眼鏡|めがね|kính
+もう一度|もういちど|một lần nữa
+木曜日|もくようび|thứ năm
+物|もの|đồ vật
+門|もん|cổng, cửa
+問題|もんだい|vấn đề
+八百屋|やおや|cửa hàng rau
+野菜|やさい|rau
+休み|やすみ|nghỉ, nghỉ ngơi
+八つ|やっつ|tám cái (đếm vật nói chung)
+山|やま|núi
+夕方|ゆうがた|chiều tối
+夕飯|ゆうはん|bữa ăn tối
+郵便局|ゆうびんきょく|bưu điện
+|ゆうべ|đêm qua
+洋服|ようふく|quần áo kiểu phương Tây
+横|よこ|bên cạnh, bên, chiều rộng
+四つ|よっつ|bốn cái (đếm đồ vật nói chung)
+夜|よる|buổi tối, ban đêm
+来月|らいげつ|tháng sau
+来週|らいしゅう|tuần sau
+来年|らいねん|năm sau
+|ラジオ|radio
+|ラジカセ / ラジオカセット|đài cassette
+留学生|りゅうがくせい|du học sinh
+両親|りょうしん|bố mẹ
+料理|りょうり|nấu ăn, món ăn
+旅行|りょこう|du lịch
+冷蔵庫|れいぞうこ|tủ lạnh
+|レストラン|nhà hàng
+廊下|ろうか|hành lang
+六|ろく|sáu
+|ワイシャツ|áo sơ mi
+私|わたくし|tôi (khiêm nhường ngữ)
+私|わたし|tôi`,
+
+  "Động từ": `会う|あう|gặp mặt
+開く|あく|mở (tự động từ)
+開ける|あける|mở (tha động từ)
+上げる|あげる|nâng lên, tăng lên
+遊ぶ|あそぶ|chơi
+浴びる|あびる|tắm (vòi hoa sen)
+洗う|あらう|rửa
+|ある|có (đồ vật, vô tri)
+歩く|あるく|đi bộ
+|いる|có (người và động vật)
+要る|いる|cần
+入れる|いれる|cho vào, đưa vào
+歌う|うたう|hát
+生まれる|うまれる|được sinh ra
+売る|うる|bán
+教える|おしえる|dạy, chỉ cho biết
+覚える|おぼえる|nhớ
+降りる|おりる|xuống
+終る|おわる|kết thúc
+買う|かう|mua
+返す|かえす|trả lại
+帰る|かえる|về
+|かかる|mất, tốn (thời gian, tiền bạc…)
+書く|かく|viết
+貸す|かす|cho vay, cho mượn
+借りる|かりる|vay, mượn
+消える|きえる|biến mất, tắt (điện)
+聞く|きく|nghe, hỏi
+切る|きる|cắt
+着る|きる|mặc (từ trên xuống như áo…)
+曇る|くもる|có mây, nhiều mây
+来る|くる|đến
+答える|こたえる|trả lời
+|コピーする|copy, sao chép
+困る|こまる|bối rối, khó khăn, rắc rối
+散歩|さんぽする|đi dạo
+閉まる|しまる|đóng (tự động từ)
+閉める|しめる|đóng (tha động từ)
+知る|しる|biết
+吸う|すう|hút
+住む|すむ|sống
+|する|làm, chơi, tổ chức…
+座る|すわる|ngồi
+掃除する|そうじする|dọn dẹp
+出す|だす|lấy ra, nộp, gửi (thư)
+立つ|たつ|đứng
+頼む|たのむ|nhờ
+食べる|たべる|ăn
+使う|つかう|sử dụng
+疲れる|つかれる|mệt mỏi
+着く|つく|đến
+作る|つくる|làm, chế tạo, nấu ăn
+|つける|bật
+勤める|つとめる|làm việc
+出かける|でかける|đi ra ngoài
+出る|でる|ra, rời khỏi, xuất hiện
+飛ぶ|とぶ|bay, nhảy
+止まる|とまる|dừng lại (tự động từ)
+止める|とめる|đỗ, đậu (xe, đài…) (tha động từ)
+取る|とる|lấy (muối…)
+撮る|とる|chụp ảnh hoặc quay phim
+鳴く|なく|kêu, hót
+無くす|なくす|làm mất, đánh mất
+習う|ならう|học
+並ぶ|ならぶ|xếp hàng, ngang bằng
+並べる|ならべる|sắp xếp, bố trí
+|なる|trở nên, trở thành
+脱ぐ|ぬぐ|cởi
+寝る|ねる|đi ngủ, ngủ
+登る|のぼる|leo lên
+飲む|のむ|uống
+乗る|のる|lên (tàu, xe…), cưỡi ngựa
+入る|はいる|vào, đi vào
+履く|はく|mặc, đi (từ dưới lên)
+始まる|はじまる|được bắt đầu (tự động từ)
+始める|はじめる|bắt đầu (tha động từ)
+走る|はしる|chạy
+働く|はたらく|làm việc
+話す|はなす|nói chuyện
+貼る|はる|dán
+晴れる|はれる|có nắng, thời tiết đẹp
+引く|ひく|kéo
+弾く|ひく|chơi (nhạc cụ)
+吹く|ふく|thổi
+降る|ふる|rơi (mưa, tuyết)
+勉強する|べんきょうする|học
+曲る|まがる|rẽ, cong
+待つ|まつ|chờ đợi
+見せる|みせる|cho xem
+見る|みる|xem, nhìn, trông
+持つ|もつ|mang, cầm
+休む|やすむ|nghỉ, nghỉ ngơi
+|やる|làm
+呼ぶ|よぶ|gọi
+読む|よむ|đọc
+練習|れんしゅうする|thực hành, luyện tập
+分かる|わかる|hiểu, nắm được
+忘れる|わすれる|quên
+渡す|わたす|đưa cho
+渡る|わたる|đi qua, băng qua`,
+
+  "Tính từ い": `青い|あおい|xanh da trời
+赤い|あかい|màu đỏ
+明い|あかるい|sáng, tươi sáng, vui vẻ
+暖かい|あたたかい|ấm áp
+新しい|あたらしい|mới
+暑い|あつい|nóng (thời tiết)
+熱い|あつい|nóng (khi chạm vào)
+厚い|あつい|dày
+危ない|あぶない|nguy hiểm
+甘い|あまい|ngọt, ngọt ngào
+|いい/よい|tốt
+忙しい|いそがしい|bận rộn
+痛い|いたい|đau
+|うるさい|ồn ào, gây phiền nhiễu
+美味しい|おいしい|ngon
+多い|おおい|nhiều
+大きい|おおきい|to, lớn
+遅い|おそい|muộn, chậm
+重い|おもい|nặng
+|おもしろい|thú vị
+辛い|からい|cay
+軽い|かるい|nhẹ
+|かわいい|dễ thương
+黄色い|きいろい|màu vàng
+汚い|きたない|bẩn
+暗い|くらい|tối
+寒い|さむい|lạnh
+白い|しろい|trắng
+少ない|すくない|một chút, một ít
+涼しい|すずしい|mát
+狭い|せまい|hẹp
+楽しい|たのしい|vui
+小さい|ちいさい|nhỏ
+近い|ちかい|gần
+|つまらない|nhàm chán
+冷たい|つめたい|lạnh, buốt (khi chạm vào)
+遠い|とおい|xa
+長い|ながい|dài
+早い|はやい|sớm
+速い|はやい|nhanh chóng
+広い|ひろい|rộng rãi, rộng
+太い|ふとい|béo
+古い|ふるい|cũ (không dùng cho người)
+欲しい|ほしい|muốn
+細い|ほそい|gầy, hẹp, thon
+|まずい|dở (món ăn), không ổn rồi
+丸い|まるい|tròn
+短い|みじかい|ngắn
+難しい|むずかしい|khó
+安い|やすい|giá rẻ
+弱い|よわい|yếu
+強い|つよい|mạnh
+若い|わかい|trẻ
+悪い|わるい|xấu`,
+
+  "Tính từ な": `嫌|いや|chán, ghét, khó chịu
+|いろいろ|nhiều, đa dạng
+|すてき|đẹp, hay
+嫌い|きらい|ghét, không thích
+|きれい|đẹp, sạch sẽ
+結構|けっこう|đủ
+元気|げんき|khỏe mạnh
+静か|しずか|yên tĩnh
+上手|じょうず|giỏi, khéo
+丈夫|じょうぶ|chắc, bền
+好き|すき|thích
+大丈夫|だいじょうぶ|không sao, không vấn đề gì
+大好き|だいすき|rất thích
+大切|たいせつ|quan trọng, quý giá
+大変|たいへん|khó khăn, vất vả
+小さな|ちいさな|nhỏ
+賑やか|にぎやか|náo nhiệt
+暇|ひま|rảnh rỗi
+便利|べんり|tiện lợi
+|りっぱ|lộng lẫy, tuyệt vời
+不便|ふべん|bất tiện
+簡単|かんたん|đơn giản`,
+
+  "Từ loại khác": `|あまり|không ~ lắm
+一緒|いっしょ|cùng nhau
+後|あと|sau đó
+|あのう|à, ừm… (ngại ngùng, do dự)
+|いいえ|không
+|いかが|như thế nào (lịch sự của どう)
+|いくつ|bao nhiêu cái? bao nhiêu tuổi?
+|いくら|bao nhiêu? (hỏi giá tiền)
+|いつ|khi nào
+|いつも|luôn luôn
+|ええ|vâng, có (như はい)
+先|さき|trước (làm gì đó trước)
+|しかし|tuy nhiên
+|すぐに|ngay lập tức
+|その|~ đó
+|それから|sau đó
+|それでは|vậy thì, thế thì
+|たくさん|nhiều
+|たぶん|có thể, có lẽ
+誰|だれ|ai, người nào
+誰|だれか|ai đó
+|だんだん|dần dần
+|ちょうど|vừa đúng, vừa đủ
+|ちょっと|một ít, một chút
+次|つぎ|tiếp theo
+|どう|như thế nào
+|どうして|tại sao
+|どうぞ|xin mời
+|どこ|chỗ nào
+|どちら|phía nào
+|どっち|phía nào (thân mật của どちら)
+|どれ|cái nào
+|なぜ|tại sao
+|など|vân vân
+何|なん/なに|gì, cái gì
+|はい|vâng, có
+|ほか|khác
+|まっすぐ|thẳng
+|さあ|dùng để chuyển đề tài`,
+};
+
+const CATS = Object.keys(VRAW);
+let uid = 0;
+const VDATA = CATS.flatMap((cat) =>
+  VRAW[cat].split("\n").map((line) => {
+    const [kanji, kana, vi] = line.split("|");
+    return { id: uid++, cat, kanji, kana, vi };
+  })
+);
+
+// Chủ đề: mỗi từ được gán theo chữ Hán (hoặc kana nếu không có chữ Hán)
+const TOPICS = {
+  "Số đếm": "一 二 三 四 六 七 八 十 百 千 万 ゼロ 一つ 二つ 三つ 四つ 五つ 六つ 七つ 八つ 九つ 一人 二人 二十歳 半 半分 いくつ いくら",
+  "Thứ - ngày - tháng - mùa": "一日 二日 三日 四日 五日 六日 七日 八日 九日 十日 二十日 一月 月曜日 火曜日 水曜日 木曜日 金曜日 土曜日 日曜日 春 夏 秋 冬",
+  "Thời gian": "朝 明日 あさって 今 今日 昨日 一昨日 一昨年 去年 今年 来年 再来年 今朝 今晩 今月 今週 先月 先週 来月 来週 毎朝 毎月 毎週 毎日 毎年 毎晩 午前 午後 昼 夕方 夜 晩 ゆうべ 時間 年 夏休み 休み 誕生日 時々 次 先 後",
+  "Gia đình & con người": "兄 姉 妹 弟 お母さん お父さん お兄さん お姉さん おじいさん おじさん おばあさん おばさん 奥さん 家族 家庭 兄弟 両親 子供 男 男の子 女の子 大人 人 あなた 私 自分 皆さん みんな 友達 結婚 外国人 大勢 留学生 方",
+  "Trường học & công việc": "先生 学生 生徒 医者 おまわりさん 警官 学校 大学 教室 授業 宿題 質問 問題 テスト 作文 辞書 言葉 漢字 英語 文章 ページ 鉛筆 ボールペン ペン 万年筆 紙 本 本棚 雑誌 新聞 会社 仕事 話 意味 名前 番号",
+  "Cơ thể & sức khỏe": "足 頭 おなか 口 鼻 耳 目 手 歯 背 声 薬 病気 病院 風邪",
+  "Ăn uống": "朝ご飯 昼ご飯 晩御飯 夕飯 御飯 食べ物 飲み物 お菓子 飴 お茶 お酒 水 牛乳 紅茶 コーヒー パン 卵 肉 牛肉 とり肉 豚肉 魚 野菜 果物 砂糖 塩 しょうゆ バター カレー お弁当 料理 ちゃわん お皿 ナイフ フォーク スプーン 箸 コップ カップ 食堂 レストラン 喫茶店 八百屋 美味しい 甘い 辛い まずい 食べる 飲む 吸う",
+  "Quần áo & màu sắc": "服 洋服 上着 シャツ ワイシャツ セーター コート ズボン スカート ネクタイ 靴 靴下 帽子 眼鏡 ハンカチ ポケット ボタン 財布 傘 かばん 色 黄色 茶色 緑 黒 青い 赤い 白い 黄色い 着る 履く 脱ぐ",
+  "Nhà cửa & đồ dùng": "家 部屋 玄関 台所 庭 お風呂 トイレ お手洗い 階段 廊下 窓 戸 ドア 門 椅子 机 テーブル ベッド 電気 ストーブ 冷蔵庫 テレビ ラジオ ラジカセ テープレコーダー カメラ 時計 電話 かぎ 箱 花瓶 灰皿 カレンダー せっけん シャワー 荷物 物 アパート 写真 絵 フィルム 手紙 葉書 封筒 切手 切符 お金 浴びる 洗う 洗濯 掃除 掃除する 寝る 住む エレベーター",
+  "Địa điểm & giao thông": "駅 銀行 郵便局 図書館 公園 映画館 大使館 交番 デパート ホテル 店 町 村 国 外国 道 橋 交差点 建物 プール 電車 地下鉄 バス タクシー 自転車 自動車 車 飛行機 池 所 地図",
+  "Phương hướng & vị trí": "北 南 東 西 上 下 前 後ろ 中 外 右 左 横 隣 向こう そば 辺 入口 出口 角 まっすぐ 近い 遠い",
+  "Thiên nhiên, thời tiết & động vật": "雨 風 空 山 川 海 木 花 曇り 天気 犬 猫 鳥 動物 ペット 晴れる 曇る 降る 吹く 鳴く 暑い 寒い 涼しい 暖かい",
+  "Sở thích, đơn vị & khác": "歌 音楽 映画 スポーツ ギター 旅行 買い物 パーティー ニュース キロ グラム メートル 同じ 本当 もう一度 クラス 遊ぶ 歌う 弾く 散歩 撮る",
+  "Động từ: sinh hoạt & hành động": "休む 作る 切る 使う 疲れる 生まれる 持つ つける 消える 開く 開ける 閉まる 閉める 貼る コピーする する やる ある いる 要る かかる 並ぶ 並べる 立つ 座る 働く 勤める 困る 止まる 止める 待つ",
+  "Động từ: di chuyển": "来る 帰る 歩く 走る 飛ぶ 登る 降りる 乗る 入る 出る 出かける 着く 渡る 曲る",
+  "Động từ: học & giao tiếp": "会う 話す 聞く 答える 教える 習う 覚える 忘れる 知る 分かる 読む 書く 見る 見せる 呼ぶ 頼む 勉強する 練習",
+  "Động từ: mua bán, cho nhận & thay đổi": "買う 売る 貸す 借りる 返す 渡す 上げる 取る 出す 入れる 無くす 始まる 始める 終る なる 引く",
+  "Tính từ: kích thước & mức độ": "大きい 小さい 小さな 長い 短い 広い 狭い 太い 細い 重い 軽い 多い 少ない 早い 速い 遅い 厚い 丸い 熱い 冷たい 痛い 暗い 明い",
+  "Tính từ: tính chất & đánh giá": "いい 悪い 新しい 古い 若い 強い 弱い 忙しい 楽しい つまらない おもしろい 難しい 安い 危ない 汚い うるさい かわいい 欲しい 簡単 便利 不便 元気 静か 賑やか 暇 好き 嫌い 嫌 大好き 上手 丈夫 大丈夫 大切 大変 きれい すてき りっぱ いろいろ 結構",
+  "Từ chỉ định, câu hỏi & phó từ": "これ それ あれ ここ そこ あそこ こちら そちら あちら こっち こんな あまり 一緒 あのう いいえ いかが いつ いつも ええ しかし すぐに その それから それでは たくさん たぶん 誰 だんだん ちょうど ちょっと どう どうして どうぞ どこ どちら どっち どれ なぜ など 何 はい ほか さあ",
+};
+const keyOf = (w) => w.kanji || w.kana.split(/\s*[\/,、]\s*/)[0].trim();
+const TOPIC_OF = {};
+Object.entries(TOPICS).forEach(([t, str]) => str.split(/\s+/).forEach((k) => { if (k && !(k in TOPIC_OF)) TOPIC_OF[k] = t; }));
+VDATA.forEach((w) => { w.topic = TOPIC_OF[keyOf(w)] || "Khác"; });
+const TOPIC_NAMES = [...Object.keys(TOPICS), "Khác"];
+const main = (w) => w.kanji || w.kana;
+
+function vspeak(w) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  const text = w.kana.split(/[,/]/)[0].trim();
+  const synth = window.speechSynthesis;
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "ja-JP";
+  u.rate = 0.85;
+  const v = synth.getVoices().find((x) => x.lang.replace("_", "-").startsWith("ja"));
+  if (v) u.voice = v;
+  synth.speak(u);
+}
+
+function VSpeak({ w, size = "sm" }) {
+  return (
+    <button
+      type="button"
+      title="Nghe phát âm"
+      aria-label="Nghe phát âm"
+      onClick={(e) => {
+        e.stopPropagation();
+        vspeak(w);
+      }}
+      className={`flex shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white transition duration-150 hover:border-red-200 hover:bg-red-50 active:scale-95 ${
+        size === "lg" ? "w-12 h-12 text-2xl" : "w-9 h-9 text-base"
+      }`}
+    >
+      🔊
+    </button>
+  );
+}
+
+
+function VocabSection() {
+  const [cat, setCat] = useState("Tất cả");
+  const [mode, setMode] = useState("list");
+  const [q, setQ] = useState("");
+  const [hide, setHide] = useState("none"); // none | vi | jp
+  const [revealed, setRevealed] = useState({});
+
+  const [topic, setTopic] = useState("Tất cả");
+  const inCat = useMemo(() => (cat === "Tất cả" ? VDATA : VDATA.filter((w) => w.cat === cat)), [cat]);
+  const topicCount = useMemo(() => {
+    const c = {};
+    inCat.forEach((w) => { c[w.topic] = (c[w.topic] || 0) + 1; });
+    return c;
+  }, [inCat]);
+  const pool = useMemo(() => (topic === "Tất cả" ? inCat : inCat.filter((w) => w.topic === topic)), [inCat, topic]);
+  const poolKey = cat + "|" + topic;
+
+  return (
+    <div style={JP}>
+      <PageHeader
+        title="Từ vựng N5"
+        desc="Từ vựng cơ bản theo loại từ và chủ đề — nghe, lật thẻ, trắc nghiệm"
+        count={`${pool.length}/${VDATA.length} từ`}
+      />
+
+      <ChipRow label="Loại từ">
+        {["Tất cả", ...CATS].map((c) => (
+          <Chip
+            key={c}
+            active={cat === c}
+            onClick={() => { setCat(c); setTopic("Tất cả"); }}
+          >
+            {c}
+            <span className={cx("ml-1.5 text-xs", cat === c ? "text-red-100" : "text-stone-400")}>
+              {c === "Tất cả" ? VDATA.length : VDATA.filter((w) => w.cat === c).length}
+            </span>
+          </Chip>
+        ))}
+      </ChipRow>
+
+      <ChipRow label="Chủ đề" className="mb-4">
+        {["Tất cả", ...TOPIC_NAMES].filter((t) => t === "Tất cả" || topicCount[t]).map((t) => (
+          <Chip key={t} active={topic === t} onClick={() => setTopic(t)}>
+            {t}
+            <span className={cx("ml-1.5 text-xs", topic === t ? "text-red-100" : "text-stone-400")}>
+              {t === "Tất cả" ? inCat.length : topicCount[t]}
+            </span>
+          </Chip>
+        ))}
+      </ChipRow>
+
+      <Segmented
+        className="mb-5"
+        items={[
+          ["list", "Danh sách"],
+          ["card", "Flashcard"],
+          ["quiz", "Trắc nghiệm"],
+        ]}
+        value={mode}
+        onChange={setMode}
+      />
+
+      {mode === "list" && (
+        <VListView key={poolKey} pool={pool} q={q} setQ={setQ} hide={hide} setHide={setHide} revealed={revealed} setRevealed={setRevealed} />
+      )}
+      {mode === "card" && <VCardView key={poolKey} pool={pool} />}
+      {mode === "quiz" && <VQuizView key={poolKey} pool={pool} />}
+    </div>
+  );
+}
+
+function VListView({ pool, q, setQ, hide, setHide, revealed, setRevealed }) {
+  const ql = q.trim().toLowerCase();
+  const rows = ql
+    ? pool.filter((w) => (w.kanji + w.kana + w.vi).toLowerCase().includes(ql))
+    : pool;
+  return (
+    <>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Tìm kiếm (Nhật hoặc Việt)…"
+          aria-label="Tìm kiếm từ vựng"
+          className="min-w-[180px] flex-1 rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100"
+        />
+        <select
+          value={hide}
+          aria-label="Chế độ ẩn"
+          onChange={(e) => {
+            setHide(e.target.value);
+            setRevealed({});
+          }}
+          className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-700"
+        >
+          <option value="none">Hiện tất cả</option>
+          <option value="vi">Ẩn nghĩa tiếng Việt</option>
+          <option value="jp">Ẩn tiếng Nhật</option>
+        </select>
+      </div>
+      <p className="mb-2 text-xs text-stone-500">
+        {rows.length} từ{hide !== "none" && " · bấm vào dòng để hiện đáp án"}
+      </p>
+      <Panel className="divide-y divide-stone-100 overflow-hidden">
+        {rows.map((w) => {
+          const open = hide === "none" || revealed[w.id];
+          const toggle = () => hide !== "none" && setRevealed((r) => ({ ...r, [w.id]: !r[w.id] }));
+          return (
+            <div key={w.id} onClick={toggle}
+              className="flex cursor-pointer items-start gap-3 px-3.5 py-3 transition duration-150 hover:bg-stone-50 active:bg-stone-100 sm:px-4">
+              <div className="min-w-0 flex-1">
+                <div className={cx("break-words text-[15px] font-medium leading-snug text-stone-900", hide === "jp" && !open && "invisible")} style={JP}>
+                  {main(w)}
+                </div>
+                {w.kanji && (
+                  <div className={cx("mt-0.5 break-words text-xs leading-snug text-stone-500", hide === "jp" && !open && "invisible")}>
+                    {w.kana}
+                  </div>
+                )}
+              </div>
+              <div className={cx("min-w-0 flex-1 break-words text-sm leading-snug", hide === "vi" && !open ? "text-stone-300" : "text-stone-700")}>
+                {hide === "vi" && !open ? "• • •" : w.vi}
+              </div>
+              {!(hide === "jp" && !open) && <VSpeak w={w} />}
+            </div>
+          );
+        })}
+        {rows.length === 0 && (
+          <div className="p-6 text-center text-sm text-stone-500">Không tìm thấy từ nào.</div>
+        )}
+      </Panel>
+    </>
+  );
+}
+
+function VCardView({ pool }) {
+  const [deck, setDeck] = useState(pool);
+  const [i, setI] = useState(0);
+  const [flip, setFlip] = useState(false);
+  const [known, setKnown] = useState({});
+  const [viFirst, setViFirst] = useState(false);
+
+  const w = deck[i];
+  const [auto, setAuto] = useState(true);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    if (auto && (viFirst ? flip : !flip)) vspeak(w);
+  }, [i, flip, viFirst, auto]);
+  const go = (d) => {
+    setFlip(false);
+    setI((x) => (x + d + deck.length) % deck.length);
+  };
+  const front = viFirst ? (
+    <div className="break-words px-5 text-center text-xl leading-relaxed text-stone-900 sm:text-2xl">{w.vi}</div>
+  ) : (
+    <div className="break-words px-5 text-center text-4xl font-bold leading-tight text-stone-900 sm:text-5xl" style={JP}>
+      {main(w)}
+    </div>
+  );
+  const back = viFirst ? (
+    <div className="text-center">
+      <div className="break-words px-5 text-4xl font-bold leading-tight text-stone-900 sm:text-5xl" style={JP}>{main(w)}</div>
+      {w.kanji && <div className="mt-2 break-words text-lg text-stone-600 sm:text-xl" style={JP}>{w.kana}</div>}
+    </div>
+  ) : (
+    <div className="px-5 text-center">
+      {w.kanji && (
+        <div className="mb-2 break-words text-xl font-medium text-stone-600 sm:text-2xl" style={JP}>{w.kana}</div>
+      )}
+      <div className="break-words text-lg leading-relaxed text-stone-900 sm:text-xl">{w.vi}</div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between gap-3 text-sm">
+        <span className="text-stone-600">
+          Từ <b className="font-semibold text-stone-900">{i + 1}</b>
+          <span className="text-stone-400">/{deck.length}</span>
+        </span>
+        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+          Đã thuộc {Object.keys(known).filter((k) => known[k]).length}
+        </span>
+      </div>
+
+      <ChipRow className="mb-3">
+        <Chip onClick={() => { setDeck(shuffle(pool)); setI(0); setFlip(false); }}>Xáo trộn</Chip>
+        <Chip onClick={() => { setViFirst(!viFirst); setFlip(false); }}>
+          Mặt trước: {viFirst ? "tiếng Việt" : "tiếng Nhật"}
+        </Chip>
+        <Chip active={auto} onClick={() => setAuto(!auto)}>Tự đọc: {auto ? "Bật" : "Tắt"}</Chip>
+      </ChipRow>
+
+      <div
+        onClick={() => setFlip(!flip)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlip(!flip); } }}
+        className={cx(
+          "flex min-h-[15rem] cursor-pointer select-none items-center justify-center rounded-2xl border-2 px-3 py-6 shadow-sm transition duration-150 sm:min-h-[17rem]",
+          flip ? "border-emerald-500 bg-emerald-50/60" : "border-stone-200 bg-white",
+          known[w.id] && "ring-2 ring-emerald-400"
+        )}
+      >
+        <div className="flex w-full flex-col items-center gap-4">
+          {flip ? back : front}
+          {(flip || !viFirst) && <VSpeak w={w} size="lg" />}
+        </div>
+      </div>
+      <p className="mt-2 text-center text-xs text-stone-500">Chạm thẻ để lật</p>
+
+      <div className="mt-4">
+        <button
+          type="button"
+          onClick={() => setKnown((k) => ({ ...k, [w.id]: !k[w.id] }))}
+          className={cx(
+            "w-full rounded-xl border px-4 py-3 text-sm font-semibold transition duration-150 sm:text-base",
+            known[w.id]
+              ? "border-emerald-600 bg-emerald-600 text-white"
+              : "border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
+          )}
+        >
+          {known[w.id] ? "Đã thuộc ✓" : "Đánh dấu đã thuộc"}
+        </button>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => go(-1)} className={cx(BTN.ghost, "py-3")}>← Trước</button>
+          <button type="button" onClick={() => go(1)} className={cx(BTN.primary, "py-3 text-sm sm:text-base")}>Sau →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function makeQuestion(pool, dir) {
+  const d = dir === "mix" ? (Math.random() < 0.5 ? "jp2vi" : "vi2jp") : dir;
+  const answer = pool[Math.floor(Math.random() * pool.length)];
+  const others = shuffle(pool.filter((w) => w.vi !== answer.vi && main(w) !== main(answer))).slice(0, 3);
+  return { answer, options: shuffle([answer, ...others]), dir: d };
+}
+
+function VQuizView({ pool }) {
+  const [dir, setDir] = useState("jp2vi");
+  const [ques, setQues] = useState(() => makeQuestion(pool, "jp2vi"));
+  const [picked, setPicked] = useState(null);
+  const [score, setScore] = useState({ ok: 0, total: 0 });
+
+  if (pool.length < 4) return <p className="text-sm">Cần ít nhất 4 từ để làm trắc nghiệm.</p>;
+
+  const next = (d = dir) => {
+    setQues(makeQuestion(pool, d));
+    setPicked(null);
+  };
+  const choose = (o) => {
+    if (picked) return;
+    setPicked(o);
+    setScore((s) => ({ ok: s.ok + (o.id === ques.answer.id ? 1 : 0), total: s.total + 1 }));
+    vspeak(ques.answer);
+  };
+  const jp2vi = ques.dir === "jp2vi";
+  const a = ques.answer;
+  if (pool.length < 4)
+    return (
+      <Panel className="p-4 text-sm text-stone-600">
+        Cần ít nhất 4 từ để làm trắc nghiệm — hãy chọn loại từ hoặc chủ đề rộng hơn.
+      </Panel>
+    );
+  const right = picked && picked.id === a.id;
+
+  return (
+    <div>
+      <ProgressHeader ok={score.ok} n={score.total} />
+
+      <ChipRow className="mb-3">
+        {[["jp2vi", "Nhật → Việt"], ["vi2jp", "Việt → Nhật"], ["mix", "Trộn cả hai"]].map(([d, l]) => (
+          <Chip key={d} active={dir === d} onClick={() => { setDir(d); next(d); }}>
+            {l}
+          </Chip>
+        ))}
+      </ChipRow>
+
+      <Panel className="mb-3 px-4 py-6 text-center">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+          {jp2vi ? "Từ này nghĩa là gì…" : "Từ tiếng Việt nào là…"}
+        </div>
+        {jp2vi ? (
+          <>
+            <div className="mt-2 break-words text-4xl font-bold leading-tight text-stone-900 sm:text-5xl" style={JP}>
+              {main(a)}
+            </div>
+            {picked && a.kanji && (
+              <div className="mt-2 break-words text-base text-stone-600" style={JP}>{a.kana}</div>
+            )}
+            <div className="mt-4 flex justify-center">
+              <VSpeak w={a} size="lg" />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="mt-2 break-words text-xl leading-relaxed text-stone-900 sm:text-2xl">{a.vi}</div>
+            {picked && (
+              <div className="mt-4 flex justify-center">
+                <VSpeak w={a} size="lg" />
+              </div>
+            )}
+          </>
+        )}
+      </Panel>
+
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        {ques.options.map((o) => {
+          const isRight = o.id === a.id;
+          let cls = "border-stone-200 bg-white text-stone-900 hover:border-stone-300 hover:bg-stone-50";
+          if (picked) {
+            if (isRight) cls = "border-emerald-500 bg-emerald-50 text-emerald-800";
+            else if (picked.id === o.id) cls = "border-red-400 bg-red-50 text-red-800";
+            else cls = "border-stone-200 bg-white text-stone-900 opacity-55";
+          }
+          return (
+            <button
+              key={o.id}
+              type="button"
+              disabled={!!picked}
+              onClick={() => choose(o)}
+              className={cx(
+                "flex min-h-[56px] w-full items-center gap-2 rounded-xl border px-3 py-3 text-left transition duration-150 active:scale-[0.99]",
+                cls
+              )}
+            >
+              <span className="min-w-0 flex-1">
+                {jp2vi ? (
+                  <span className="break-words text-sm leading-snug sm:text-base">{o.vi}</span>
+                ) : (
+                  <span>
+                    <span className="break-words text-[15px] font-medium leading-snug" style={JP}>{main(o)}</span>
+                    {o.kanji && (
+                      <span className="mt-0.5 block break-words text-xs leading-snug text-stone-500" style={JP}>{o.kana}</span>
+                    )}
+                  </span>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {picked && (
+        <Feedback
+          ok={right}
+          footer={
+            <button type="button" onClick={() => next()} className={cx(BTN.primary, "mt-3")}>
+              Câu tiếp theo →
+            </button>
+          }
+        >
+          {right ? (
+            <>Chính xác — <b>{main(a)}</b> {a.kanji && <span style={JP}>({a.kana})</span>}</>
+          ) : (
+            <>Chưa đúng — đáp án đúng: <b>{main(a)}</b> {a.kanji && <span style={JP}>({a.kana})</span>} — {a.vi}</>
+          )}
+        </Feedback>
+      )}
+    </div>
+  );
+}
+
+const NAV = [
+  ["kana", "あ", "Chữ cái"],
+  ["kanji", "漢", "Hán tự"],
+  ["num", "数", "Số đếm"],
+  ["vocab", "語", "Từ vựng"],
+];
+
+export default function App() {
+  const [tab, setTab] = useState("kana");
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [tab]);
+  return (
+    <div className="min-h-screen bg-stone-50 text-stone-900" style={JP}>
+      <header className="sticky top-0 z-40 border-b border-stone-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-3xl items-center gap-2.5 px-4 py-2.5 sm:px-6 lg:max-w-4xl">
+          <span
+            aria-hidden="true"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-700 text-lg font-bold text-white shadow-sm"
+          >
+            あ
+          </span>
+          <div className="min-w-0 leading-tight">
+            <div className="text-[15px] font-bold tracking-tight text-stone-900">KanaLearn</div>
+            <div className="truncate text-xs text-stone-500">
+              {NAV.find(([k]) => k === tab)?.[2]} · Học tiếng Nhật từng bước
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto w-full max-w-3xl px-4 pb-28 pt-4 sm:px-6 sm:pt-6 lg:max-w-4xl">
+        {tab === "kana" && <KanaSection />}
+        {tab === "kanji" && <KanjiSection />}
+        {tab === "num" && <NumSection />}
+        {tab === "vocab" && <VocabSection />}
+      </main>
+
+      <nav
+        aria-label="Điều hướng chính"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+      >
+        <div className="mx-auto grid max-w-3xl grid-cols-4 lg:max-w-4xl">
+          {NAV.map(([k, icon, label]) => {
+            const on = tab === k;
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setTab(k)}
+                aria-current={on ? "page" : undefined}
+                className={cx(
+                  "relative flex min-h-[58px] flex-col items-center justify-center gap-0.5 px-1 transition duration-150",
+                  on ? "text-red-700" : "text-stone-500 hover:text-stone-800"
+                )}
+              >
+                {on && <span aria-hidden="true" className="absolute inset-x-5 top-0 h-0.5 rounded-full bg-red-700" />}
+                <span className="text-lg leading-none" style={JP}>{icon}</span>
+                <span className={cx("text-[11px] leading-none", on && "font-semibold")}>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+    </div>
+  );
+}
