@@ -3,6 +3,7 @@ import Home from "./pages/Home.jsx";
 import News from "./pages/News.jsx";
 import Profile from "./pages/Profile.jsx";
 import LearnApp from "../KanaLearn.jsx";
+import bgFuji from "./images/background.png";
 
 const JP = {
   fontFamily: '"Be Vietnam Pro","Noto Sans JP","Hiragino Sans","Yu Gothic","Meiryo",system-ui,sans-serif',
@@ -46,6 +47,7 @@ export default function App() {
     return <LearnApp initialTab={route.tab} onHome={() => go("home")} />;
   }
 
+  const isHome = route.page === "home";
   const navItems = [
     { key: "home", label: "Trang chủ" },
     { key: "news", label: "Tin tức" },
@@ -53,7 +55,13 @@ export default function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900" style={JP}>
+    <div className="relative min-h-screen text-stone-900" style={JP}>
+      {isHome && (
+        <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 select-none overflow-hidden">
+          <img src={bgFuji} alt="" draggable={false} className="h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-stone-50/50 via-stone-50/40 to-stone-50/80" />
+        </div>
+      )}
       <header className="sticky top-0 z-40 border-b border-stone-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:max-w-4xl">
           <button

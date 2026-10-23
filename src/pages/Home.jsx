@@ -17,20 +17,9 @@ const STEPS = [
   { n: "03", title: "Nhớ lâu", desc: "Ôn tập chủ động — nghe phát âm, kiểm tra nhanh." },
 ];
 
-function ScrollBackground() {
-  return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none fixed inset-0 z-0 select-none bg-gradient-to-b from-stone-50 to-stone-100"
-    />
-  );
-}
-
 export default function Home({ onLearn, onNews }) {
   return (
-    <div style={JP} className="relative">
-      <ScrollBackground />
-
+    <div style={JP}>
       <div className="relative z-10">
         {/* Hero */}
         <section className="relative overflow-hidden">
