@@ -7,5 +7,11 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    // Render đổi hostnames (vd: appjapanlearning-1.onrender.com) — cho phép mọi subdomain .onrender.com
+    allowedHosts: [".onrender.com"],
+  },
+  preview: {
+    host: true,
+    port: 4173,
   },
 });
