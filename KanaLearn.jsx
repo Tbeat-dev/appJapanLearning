@@ -1,4 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
+import { record, toggleKnown, useProfile } from "./src/lib/progress.js";
+import { FocusWrap, useFocusSession } from "./src/components/Focus.jsx";
 import kanaGroups from "./src/data/kana.json";
 import kanjiList from "./src/data/kanji.json";
 import countersList from "./src/data/counters.json";
@@ -338,6 +340,7 @@ function makeQ(pool, dir) {
 }
 
 function Quiz({ pool }) {
+  const fs = useFocusSession({ secKey: "kana", kind: "quiz", label: "Trắc nghiệm chữ cái" });
   const [dir, setDir] = useState("k2r");
   const [q, setQ] = useState(() => makeQ(pool, "k2r"));
   const [sel, setSel] = useState(null);
@@ -347,7 +350,10 @@ function Quiz({ pool }) {
   const choose = (o) => {
     if (sel) return;
     setSel(o);
-    setSc((s) => ({ ok: s.ok + (o.id === q.a.id ? 1 : 0), n: s.n + 1 }));
+    const right = o.id === q.a.id;
+    setSc((s) => ({ ok: s.ok + (right ? 1 : 0), n: s.n + 1 }));
+    record("kana", q.a.id, right);
+    fs.answer(right, { jp: k2r ? q.a.k : q.a.r, sub: k2r ? q.a.r : q.a.k });
     speak(q.a.k);
   };
   if (pool.length < 4)
@@ -358,7 +364,7 @@ function Quiz({ pool }) {
     );
   const ok = sel && sel.id === q.a.id;
   return (
-    <div>
+    <FocusWrap fs={fs}>
       <ProgressHeader ok={sc.ok} n={sc.n} />
 
       <ChipRow className="mb-3">
@@ -424,11 +430,12 @@ function Quiz({ pool }) {
           )}
         </Feedback>
       )}
-    </div>
+    </FocusWrap>
   );
 }
 
 function TypeIn({ pool }) {
+  const fs = useFocusSession({ secKey: "kana", kind: "quiz", label: "Gõ romaji" });
   const [cur, setCur] = useState(() => pick(pool));
   const [val, setVal] = useState("");
   const [res, setRes] = useState(null);
@@ -441,6 +448,8 @@ function TypeIn({ pool }) {
     const ok = [cur.r, ...(ALIAS[cur.r] || [])].includes(v);
     setRes(ok);
     setSc((s) => ({ ok: s.ok + (ok ? 1 : 0), n: s.n + 1 }));
+    record("kana", cur.id, ok);
+    fs.answer(ok, { jp: cur.k, sub: cur.r });
     speak(cur.k);
   };
   const focusInput = () => {
@@ -448,7 +457,7 @@ function TypeIn({ pool }) {
     if (el) { el.focus(); el.scrollIntoView({ block: "center", behavior: "smooth" }); }
   };
   return (
-    <div>
+    <FocusWrap fs={fs}>
       <ProgressHeader ok={sc.ok} n={sc.n} />
 
       <Panel
@@ -505,7 +514,7 @@ function TypeIn({ pool }) {
       <p className="mt-2 text-center text-xs text-stone-500">
         Trên máy tính: nhấn Enter để kiểm tra nhanh
       </p>
-    </div>
+    </FocusWrap>
   );
 }
 
@@ -713,10 +722,12 @@ function ListView({ pool }) {
 }
 
 function CardView({ pool }) {
+  const prof = useProfile();
+  const fs = useFocusSession({ secKey: "kanji", kind: "card", label: "Flashcard Hán tự" });
+  const known = prof.known.kanji || {};
   const [deck, setDeck] = useState(pool);
   const [i, setI] = useState(0);
   const [flip, setFlip] = useState(false);
-  const [known, setKnown] = useState({});
   const [vnFirst, setVnFirst] = useState(false);
   const w = deck[i];
   const [auto, setAuto] = useState(true);
@@ -726,7 +737,7 @@ function CardView({ pool }) {
     const t = kanjiSay(w);
     if (auto && t && (vnFirst ? flip : !flip)) speak(t);
   }, [i, flip, vnFirst, auto]);
-  const go = (d) => { setFlip(false); setI((x) => (x + d + deck.length) % deck.length); };
+  const go = (d) => { setFlip(false); setI((x) => (x + d + deck.length) % deck.length); if (d > 0) fs.tick(); };
   useEffect(() => {
     const f = (e) => {
       if (e.key === "ArrowRight") go(1);
@@ -764,14 +775,14 @@ function CardView({ pool }) {
     </div>
   ) : infoSide;
   return (
-    <div>
+    <FocusWrap fs={fs}>
       <div className="mb-3 flex items-center justify-between gap-3 text-sm">
         <span className="text-stone-600">
           Thẻ <b className="font-semibold text-stone-900">{i + 1}</b>
           <span className="text-stone-400">/{deck.length}</span>
         </span>
         <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-          Đã thuộc {Object.values(known).filter(Boolean).length}
+          Đã thuộc {deck.filter((x) => known[x.id]).length}
         </span>
       </div>
 
@@ -803,7 +814,7 @@ function CardView({ pool }) {
       <div className="mt-4">
         <button
           type="button"
-          onClick={() => setKnown((k) => ({ ...k, [w.id]: !k[w.id] }))}
+          onClick={() => toggleKnown("kanji", w.id)}
           className={cx(
             "w-full rounded-xl border px-4 py-3 text-sm font-semibold transition duration-150 sm:text-base",
             known[w.id]
@@ -818,7 +829,7 @@ function CardView({ pool }) {
           <button type="button" onClick={() => go(1)} className={cx(BTN.primary, "py-3 text-sm sm:text-base")}>Sau →</button>
         </div>
       </div>
-    </div>
+    </FocusWrap>
   );
 }
 
@@ -830,6 +841,7 @@ function makeKQ(pool, dir) {
 }
 
 function QuizView({ pool }) {
+  const fs = useFocusSession({ secKey: "kanji", kind: "quiz", label: "Trắc nghiệm Hán tự" });
   const [dir, setDir] = useState("k2v");
   const [q, setQ] = useState(() => makeKQ(pool, "k2v"));
   const [sel, setSel] = useState(null);
@@ -839,7 +851,10 @@ function QuizView({ pool }) {
   const choose = (o) => {
     if (sel) return;
     setSel(o);
-    setSc((s) => ({ ok: s.ok + (o.id === q.a.id ? 1 : 0), n: s.n + 1 }));
+    const right = o.id === q.a.id;
+    setSc((s) => ({ ok: s.ok + (right ? 1 : 0), n: s.n + 1 }));
+    record("kanji", q.a.id, right);
+    fs.answer(right, { jp: q.a.k, sub: q.a.h, vi: q.a.m });
     const t = kanjiSay(q.a);
     if (t) speak(t);
   };
@@ -859,7 +874,7 @@ function QuizView({ pool }) {
     );
   const right = sel && sel.id === q.a.id;
   return (
-    <div>
+    <FocusWrap fs={fs}>
       <ProgressHeader ok={sc.ok} n={sc.n} />
 
       <ChipRow className="mb-3">
@@ -941,7 +956,7 @@ function QuizView({ pool }) {
           )}
         </Feedback>
       )}
-    </div>
+    </FocusWrap>
   );
 }
 
@@ -1177,6 +1192,7 @@ function makeNQ(max, mode) {
 }
 
 function NumQuiz() {
+  const fs = useFocusSession({ secKey: "num", kind: "quiz", label: "Trắc nghiệm số đếm" });
   const [mode, setMode] = useState("read");
   const [max, setMax] = useState(999);
   const [q, setQ] = useState(() => makeNQ(999, "read"));
@@ -1186,7 +1202,10 @@ function NumQuiz() {
   const choose = (o) => {
     if (sel !== null) return;
     setSel(o);
-    setSc((s) => ({ ok: s.ok + (o === q.n ? 1 : 0), n: s.n + 1 }));
+    const right = o === q.n;
+    setSc((s) => ({ ok: s.ok + (right ? 1 : 0), n: s.n + 1 }));
+    record("num", String(q.n), right);
+    fs.answer(right, { jp: fmt(q.n), sub: readNum(q.n)[1] });
     sayJp(readNum(q.n)[1]);
   };
   useEffect(() => { if (q.mode === "hear") sayJp(readNum(q.n)[1]); }, [q]);
@@ -1201,7 +1220,7 @@ function NumQuiz() {
   const [k, r] = readNum(q.n);
   const hear = q.mode === "hear";
   return (
-    <div>
+    <FocusWrap fs={fs}>
       <ProgressHeader ok={sc.ok} n={sc.n} />
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -1299,7 +1318,7 @@ function NumQuiz() {
           )}
         </Feedback>
       )}
-    </div>
+    </FocusWrap>
   );
 }
 
@@ -1510,10 +1529,12 @@ function VListView({ pool, q, setQ, hide, setHide, revealed, setRevealed }) {
 }
 
 function VCardView({ pool }) {
+  const prof = useProfile();
+  const fs = useFocusSession({ secKey: "vocab", kind: "card", label: "Flashcard từ vựng" });
+  const known = prof.known.vocab || {};
   const [deck, setDeck] = useState(pool);
   const [i, setI] = useState(0);
   const [flip, setFlip] = useState(false);
-  const [known, setKnown] = useState({});
   const [viFirst, setViFirst] = useState(false);
 
   const w = deck[i];
@@ -1526,6 +1547,7 @@ function VCardView({ pool }) {
   const go = (d) => {
     setFlip(false);
     setI((x) => (x + d + deck.length) % deck.length);
+    if (d > 0) fs.tick();
   };
   const front = viFirst ? (
     <div className="break-words px-5 text-center text-xl leading-relaxed text-stone-900 sm:text-2xl">{w.vi}</div>
@@ -1549,14 +1571,14 @@ function VCardView({ pool }) {
   );
 
   return (
-    <div>
+    <FocusWrap fs={fs}>
       <div className="mb-3 flex items-center justify-between gap-3 text-sm">
         <span className="text-stone-600">
           Từ <b className="font-semibold text-stone-900">{i + 1}</b>
           <span className="text-stone-400">/{deck.length}</span>
         </span>
         <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-          Đã thuộc {Object.keys(known).filter((k) => known[k]).length}
+          Đã thuộc {deck.filter((x) => known[x.id]).length}
         </span>
       </div>
 
@@ -1589,7 +1611,7 @@ function VCardView({ pool }) {
       <div className="mt-4">
         <button
           type="button"
-          onClick={() => setKnown((k) => ({ ...k, [w.id]: !k[w.id] }))}
+          onClick={() => toggleKnown("vocab", w.id)}
           className={cx(
             "w-full rounded-xl border px-4 py-3 text-sm font-semibold transition duration-150 sm:text-base",
             known[w.id]
@@ -1604,7 +1626,7 @@ function VCardView({ pool }) {
           <button type="button" onClick={() => go(1)} className={cx(BTN.primary, "py-3 text-sm sm:text-base")}>Sau →</button>
         </div>
       </div>
-    </div>
+    </FocusWrap>
   );
 }
 
@@ -1616,6 +1638,7 @@ function makeQuestion(pool, dir) {
 }
 
 function VQuizView({ pool }) {
+  const fs = useFocusSession({ secKey: "vocab", kind: "quiz", label: "Trắc nghiệm từ vựng" });
   const [dir, setDir] = useState("jp2vi");
   const [ques, setQues] = useState(() => makeQuestion(pool, "jp2vi"));
   const [picked, setPicked] = useState(null);
@@ -1630,7 +1653,10 @@ function VQuizView({ pool }) {
   const choose = (o) => {
     if (picked) return;
     setPicked(o);
-    setScore((s) => ({ ok: s.ok + (o.id === ques.answer.id ? 1 : 0), total: s.total + 1 }));
+    const right = o.id === ques.answer.id;
+    setScore((s) => ({ ok: s.ok + (right ? 1 : 0), total: s.total + 1 }));
+    record("vocab", ques.answer.id, right);
+    fs.answer(right, { jp: main(ques.answer), sub: ques.answer.kanji ? ques.answer.kana : "", vi: ques.answer.vi });
     vspeak(ques.answer);
   };
   const jp2vi = ques.dir === "jp2vi";
@@ -1644,7 +1670,7 @@ function VQuizView({ pool }) {
   const right = picked && picked.id === a.id;
 
   return (
-    <div>
+    <FocusWrap fs={fs}>
       <ProgressHeader ok={score.ok} n={score.total} />
 
       <ChipRow className="mb-3">
@@ -1736,7 +1762,7 @@ function VQuizView({ pool }) {
           )}
         </Feedback>
       )}
-    </div>
+    </FocusWrap>
   );
 }
 
@@ -1747,8 +1773,10 @@ const NAV = [
   ["vocab", "語", "Từ vựng"],
 ];
 
-export default function App() {
-  const [tab, setTab] = useState("kana");
+export default function LearnApp({ onHome, initialTab }) {
+  const [tab, setTab] = useState(() =>
+    ["kana", "kanji", "num", "vocab"].includes(initialTab) ? initialTab : "kana"
+  );
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [tab]);
@@ -1756,6 +1784,16 @@ export default function App() {
     <div className="min-h-screen bg-stone-50 text-stone-900" style={JP}>
       <header className="sticky top-0 z-40 border-b border-stone-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center gap-2.5 px-4 py-2.5 sm:px-6 lg:max-w-4xl">
+          {onHome && (
+            <button
+              type="button"
+              onClick={onHome}
+              aria-label="Về trang chủ"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-stone-200 bg-white text-base text-stone-600 transition duration-150 hover:border-red-200 hover:bg-red-50 hover:text-red-700 active:scale-[0.97]"
+            >
+              ←
+            </button>
+          )}
           <span
             aria-hidden="true"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-700 text-lg font-bold text-white shadow-sm"
