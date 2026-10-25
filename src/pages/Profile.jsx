@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Progress from "./Progress.jsx";
+import SyncSection from "./SyncSection.jsx";
 
 const JP = {
   fontFamily: '"Be Vietnam Pro","Noto Sans JP","Hiragino Sans","Yu Gothic","Meiryo",system-ui,sans-serif',
@@ -83,7 +84,7 @@ function ProfileCard({ p, onLearn, onEdit, compact }) {
   );
 }
 
-export default function Profile({ onLearn }) {
+export default function Profile({ onLearn, syncCode, onSyncConsumed }) {
   const [p, setP] = useState(() => load());
   const [saved, setSaved] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -125,6 +126,12 @@ export default function Profile({ onLearn }) {
         <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6 lg:max-w-4xl">
           <ProfileCard p={p} onLearn={onLearn} onEdit={() => setEditing(true)} />
 
+          {syncCode && (
+            <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              🔗 Nhận mã đồng bộ từ thiết bị khác — cuộn xuống mục “Đồng bộ &amp; sao lưu” để gộp.
+            </p>
+          )}
+
           <section className="fade-up delay-1">
             <div className="mb-3 flex items-center gap-2">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-500">Tiến độ học tập</h2>
@@ -132,6 +139,8 @@ export default function Profile({ onLearn }) {
             </div>
             <Progress />
           </section>
+
+          <SyncSection incomingCode={syncCode} onConsumed={onSyncConsumed} />
         </div>
       </div>
     );

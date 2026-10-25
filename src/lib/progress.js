@@ -36,7 +36,7 @@ let P = typeof window !== "undefined" ? loadP() : DEFAULT_P;
 const subs = new Set();
 
 function setP(fn) {
-  P = fn(P);
+  P = { ...fn(P), updatedAt: Date.now() };
   try {
     window.localStorage.setItem(LS_KEY, JSON.stringify(P));
   } catch (e) {
@@ -105,6 +105,11 @@ function importP(json) {
   setP(() => mergeP(json));
 }
 
+// Nhận tiến trình đã gộp từ thiết bị khác (mergeProgress trong sync.js)
+function applyProgress(next) {
+  setP(() => mergeP(next));
+}
+
 function resetP() {
   setP(() => ({
     ...DEFAULT_P,
@@ -154,6 +159,7 @@ export {
   markRemembered,
   setSetting,
   importP,
+  applyProgress,
   resetP,
   calcStreak,
   logStudy,

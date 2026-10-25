@@ -12,11 +12,18 @@ const JP = {
 const cx = (...a) => a.filter(Boolean).join(" ");
 
 const parseHash = () => {
-  const h = window.location.hash.replace(/^#\/?/, "");
-  if (h === "learn" || h.startsWith("learn/")) return { page: "learn", tab: h.split("/")[1] || null };
-  if (h === "news") return { page: "news" };
-  if (h === "profile") return { page: "profile" };
-  return { page: "home" };
+  const raw = window.location.hash.replace(/^#\/?/, "");
+  const qi = raw.indexOf("?");
+  const path = (qi >= 0 ? raw.slice(0, qi) : raw).replace(/\/+$/, "");
+  const params = new URLSearchParams(qi >= 0 ? raw.slice(qi + 1) : "");
+  const sync = params.get("sync");
+  const base = { sync: sync || null };
+  if (path === "learn" || path.startsWith("learn/")) {
+    return { ...base, page: "learn", tab: path.split("/")[1] || null };
+  }
+  if (path === "news") return { ...base, page: "news" };
+  if (path === "profile") return { ...base, page: "profile" };
+  return { ...base, page: "home" };
 };
 
 const toHash = (page, tab) => {
@@ -113,7 +120,9 @@ export default function App() {
         <div className="page-enter">
           {route.page === "home" && <Home onLearn={(tab) => go("learn", tab)} onNews={() => go("news")} />}
           {route.page === "news" && <News />}
-          {route.page === "profile" && <Profile onLearn={() => go("learn")} />}
+          {route.page === "profile" && (
+            <Profile onLearn={() => go("learn")} syncCode={route.sync} onSyncConsumed={() => go("profile")} />
+          )}
         </div>
       </main>
 
