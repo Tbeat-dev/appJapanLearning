@@ -60,9 +60,10 @@ const BTN = {
 };
 
 // Thanh điều khiển gọn: tiêu đề + một hàng điều khiển cuộn ngang (2 hàng tổng)
-function Toolbar({ title, desc, count, children }) {
+function Toolbar({ title, desc, count, children, end }) {
   return (
-    <section className="mb-4 rounded-2xl border border-stone-200 bg-white p-3 shadow-sm">
+    // Dính dưới thanh header (header cao ~57px) khi cuộn trang
+    <section className="sticky top-[57px] z-30 mb-4 rounded-2xl border border-stone-200 bg-white p-3 shadow-sm">
       <div className="flex items-center gap-2.5 px-0.5">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[17px] font-bold leading-tight tracking-tight text-stone-900 sm:text-lg">
@@ -76,8 +77,11 @@ function Toolbar({ title, desc, count, children }) {
           </span>
         )}
       </div>
-      <div className="no-scrollbar -mx-1 mt-2.5 flex items-center gap-1.5 overflow-x-auto px-1">
-        {children}
+      <div className="mt-2.5 flex items-center gap-1.5">
+        <div className="no-scrollbar -mx-1 flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto px-1">
+          {children}
+        </div>
+        {end}
       </div>
     </section>
   );
@@ -1381,9 +1385,25 @@ function NumSection() {
       title="Cách đọc số trong tiếng Nhật"
       desc="Số đếm, số lớn, ngày tháng, giờ, tuổi và lượng từ"
       count={`${TABS.length} phần`}
+      end={
+        <span className="relative shrink-0 pl-1.5">
+          <Chip active={t === "quiz"} onClick={() => setT("quiz")}>
+            Luyện tập
+          </Chip>
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-1.5 -top-1.5 block h-4 w-4"
+          >
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
+            <span className="relative inline-flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-red-600 text-[9px] font-bold leading-none text-white shadow-sm">
+              !
+            </span>
+          </span>
+        </span>
+      }
     >
       <Group>
-        {TABS.map(([k, l]) => (
+        {TABS.filter(([k]) => k !== "quiz").map(([k, l]) => (
           <Chip key={k} active={t === k} onClick={() => setT(k)}>
             {l}
           </Chip>
