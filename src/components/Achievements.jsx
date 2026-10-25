@@ -7,8 +7,8 @@ const byId = Object.fromEntries(ACH.map((a) => [a.id, a]));
 
 // Hiệu ứng của thẻ thông báo
 const FX = `
-@keyframes ach-pop { 0% { opacity: 0; transform: translateY(20px) scale(.94); }
-  60% { opacity: 1; transform: translateY(-4px) scale(1.01); }
+@keyframes ach-pop { 0% { opacity: 0; transform: translateY(-20px) scale(.94); }
+  60% { opacity: 1; transform: translateY(4px) scale(1.01); }
   100% { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes ach-ico { 0% { transform: scale(.4) rotate(-18deg); }
   70% { transform: scale(1.25) rotate(6deg); }
@@ -73,9 +73,10 @@ export function AchievementToast() {
   const shown = fresh.slice(-3).map((id) => byId[id]).filter(Boolean);
 
   // z-80: cao hơn lớp phủ chế độ Tập trung (z-60) và hộp thoại thiết lập (z-70)
+  // Gắn mép trên, dưới thanh header dính (sticky, ~57px) — tránh che điều hướng đáy
   return (
     <div
-      className="pointer-events-none fixed bottom-[calc(72px+env(safe-area-inset-bottom))] left-1/2 z-[80] w-[92%] max-w-sm -translate-x-1/2 space-y-2"
+      className="pointer-events-none fixed top-[calc(64px+env(safe-area-inset-top))] left-1/2 z-[80] w-[92%] max-w-sm -translate-x-1/2 space-y-2"
       role="status"
       aria-live="polite"
     >
