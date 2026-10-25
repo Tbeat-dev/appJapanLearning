@@ -11,6 +11,7 @@ import {
 import kanaGroups from "../data/kana.json";
 import kanjiList from "../data/kanji.json";
 import vocabList from "../data/vocab.json";
+import { AchievementsPanel } from "../components/Achievements.jsx";
 
 const JP = {
   fontFamily: '"Be Vietnam Pro","Noto Sans JP","Hiragino Sans","Yu Gothic","Meiryo",system-ui,sans-serif',
@@ -228,23 +229,6 @@ function shuffleArr(a) {
   return r;
 }
 
-// ---- huy hiệu ----
-function badgesOf(p, streak, totalOk, totalAll, acc) {
-  const knownV = Object.keys(p.known.vocab || {}).length;
-  const knownK = Object.keys(p.known.kanji || {}).length;
-  const list = [
-    { id: "s3", icon: "🔥", label: "Chuỗi 3 ngày", got: streak >= 3 },
-    { id: "s7", icon: "⚡", label: "Chuỗi 7 ngày", got: streak >= 7 },
-    { id: "s30", icon: "🏆", label: "Chuỗi 30 ngày", got: streak >= 30 },
-    { id: "q50", icon: "📝", label: "Trả lời 50 câu", got: totalAll >= 50 },
-    { id: "q200", icon: "🎯", label: "Trả lời 200 câu", got: totalAll >= 200 },
-    { id: "acc", icon: "💯", label: "Đúng ≥ 85%", got: totalAll >= 10 && acc >= 85 },
-    { id: "v50", icon: "📚", label: "50 từ đã thuộc", got: knownV >= 50 },
-    { id: "k100", icon: "🈶", label: "100 Hán tự đã thuộc", got: knownK >= 100 },
-  ];
-  return list;
-}
-
 function Bar({ label, value, total, color = "bg-red-500" }) {
   const pct = total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
   return (
@@ -284,7 +268,6 @@ export default function Progress() {
   const knownK = Object.keys(p.known.kanji || {}).length;
 
   const wrongEntries = Object.entries(p.wrong).sort((a, b) => b[1] - a[1]);
-  const badges = badgesOf(p, streak, totalOk, totalAll, acc);
 
   const onExport = () => {
     try {
@@ -406,26 +389,8 @@ export default function Progress() {
         </div>
       </section>
 
-      {/* Huy hiệu */}
-      <section className="fade-up delay-3 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-500">Huy hiệu</h3>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {badges.map((b) => (
-            <div
-              key={b.id}
-              className={cx(
-                "flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs",
-                b.got
-                  ? "border-amber-200 bg-amber-50 font-semibold text-amber-800"
-                  : "border-stone-200 bg-stone-50 text-stone-400"
-              )}
-            >
-              <span className={cx("text-lg", !b.got && "grayscale opacity-50")}>{b.icon}</span>
-              <span className="leading-tight">{b.label}</span>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* Thành tựu */}
+      <AchievementsPanel />
 
       {/* Từ hay sai */}
       {wrongEntries.length > 0 && (
@@ -502,6 +467,29 @@ export default function Progress() {
                 )}
               >
                 {g} lượt
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mt-4">
+          <div className="text-xs font-medium text-stone-600">Thông báo thành tựu</div>
+          <div className="mt-1.5 flex gap-2">
+            {[
+              ["achFx", "✨ Hiệu ứng"],
+              ["achSfx", "🔔 Âm thanh"],
+            ].map(([k, l]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setSetting(k, !p.settings[k])}
+                className={cx(
+                  "flex-1 rounded-xl border py-2.5 text-sm font-semibold transition duration-150 active:scale-95",
+                  p.settings[k]
+                    ? "border-red-500 bg-red-50 text-red-700"
+                    : "border-stone-200 bg-white text-stone-600 hover:border-red-200 hover:bg-red-50/40"
+                )}
+              >
+                {l}
               </button>
             ))}
           </div>

@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { record, toggleKnown, useProfile } from "./src/lib/progress.js";
+import { record, toggleKnown, useProfile, flushPending } from "./src/lib/progress.js";
+import { AchievementToast } from "./src/components/Achievements.jsx";
 import { FocusWrap, useFocusSession } from "./src/components/Focus.jsx";
 import kanaGroups from "./src/data/kana.json";
 import kanjiList from "./src/data/kanji.json";
@@ -346,7 +347,7 @@ function Quiz({ pool }) {
   const [sel, setSel] = useState(null);
   const [sc, setSc] = useState({ ok: 0, n: 0 });
   const k2r = q.dir === "k2r";
-  const next = (d = dir) => { setQ(makeQ(pool, d)); setSel(null); };
+  const next = (d = dir) => { flushPending(); setQ(makeQ(pool, d)); setSel(null); };
   const choose = (o) => {
     if (sel) return;
     setSel(o);
@@ -442,7 +443,7 @@ function TypeIn({ pool }) {
   const [sc, setSc] = useState({ ok: 0, n: 0 });
   const inputRef = useRef(null);
   const submit = () => {
-    if (res !== null) { setCur(pick(pool)); setVal(""); setRes(null); inputRef.current && inputRef.current.focus(); return; }
+    if (res !== null) { flushPending(); setCur(pick(pool)); setVal(""); setRes(null); inputRef.current && inputRef.current.focus(); return; }
     const v = val.trim().toLowerCase();
     if (!v) return;
     const ok = [cur.r, ...(ALIAS[cur.r] || [])].includes(v);
@@ -847,7 +848,7 @@ function QuizView({ pool }) {
   const [sel, setSel] = useState(null);
   const [sc, setSc] = useState({ ok: 0, n: 0 });
   const k2v = q.dir === "k2v";
-  const next = (d = dir) => { setQ(makeKQ(pool, d)); setSel(null); };
+  const next = (d = dir) => { flushPending(); setQ(makeKQ(pool, d)); setSel(null); };
   const choose = (o) => {
     if (sel) return;
     setSel(o);
@@ -1198,7 +1199,7 @@ function NumQuiz() {
   const [q, setQ] = useState(() => makeNQ(999, "read"));
   const [sel, setSel] = useState(null);
   const [sc, setSc] = useState({ ok: 0, n: 0 });
-  const next = (m = mode, x = max) => { setQ(makeNQ(x, m)); setSel(null); };
+  const next = (m = mode, x = max) => { flushPending(); setQ(makeNQ(x, m)); setSel(null); };
   const choose = (o) => {
     if (sel !== null) return;
     setSel(o);
@@ -1647,6 +1648,7 @@ function VQuizView({ pool }) {
   if (pool.length < 4) return <p className="text-sm">Cần ít nhất 4 từ để làm trắc nghiệm.</p>;
 
   const next = (d = dir) => {
+    flushPending();
     setQues(makeQuestion(pool, d));
     setPicked(null);
   };
@@ -1808,6 +1810,8 @@ export default function LearnApp({ onHome, initialTab }) {
           </div>
         </div>
       </header>
+
+      <AchievementToast />
 
       <main className="mx-auto w-full max-w-3xl px-4 pb-28 pt-4 sm:px-6 sm:pt-6 lg:max-w-4xl">
         {tab === "kana" && <KanaSection />}
