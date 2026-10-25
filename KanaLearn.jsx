@@ -59,37 +59,56 @@ const BTN = {
     "flex min-h-[56px] w-full items-center justify-center gap-2 rounded-xl border px-3 py-3 text-center font-medium transition duration-150 active:scale-[0.99]",
 };
 
-function PageHeader({ title, desc, count }) {
+// Thanh điều khiển gọn: tiêu đề + một hàng điều khiển cuộn ngang (2 hàng tổng)
+function Toolbar({ title, desc, count, children }) {
   return (
-    <header className="mb-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold leading-tight tracking-tight text-stone-900 sm:text-2xl">
+    <section className="mb-4 rounded-2xl border border-stone-200 bg-white p-3 shadow-sm">
+      <div className="flex items-center gap-2.5 px-0.5">
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-[17px] font-bold leading-tight tracking-tight text-stone-900 sm:text-lg">
             {title}
           </h1>
-          {desc && <p className="mt-1 text-sm leading-snug text-stone-600">{desc}</p>}
+          {desc && <p className="truncate text-xs leading-snug text-stone-500">{desc}</p>}
         </div>
         {count != null && (
-          <span className="shrink-0 rounded-full border border-red-100 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+          <span className="shrink-0 rounded-full border border-red-100 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700">
             {count}
           </span>
         )}
       </div>
-    </header>
+      <div className="no-scrollbar -mx-1 mt-2.5 flex items-center gap-1.5 overflow-x-auto px-1">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+// Vạch ngăn giữa các cụm điều khiển trong hàng cuộn
+function Sep() {
+  return <span aria-hidden="true" className="h-4 w-px shrink-0 bg-stone-200" />;
+}
+
+// Một cụm chip trong hàng cuộn: có thể kèm nhãn nhỏ phía trước
+function Group({ label, children }) {
+  return (
+    <span className="flex shrink-0 items-center gap-1.5">
+      {label && (
+        <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">{label}</span>
+      )}
+      {children}
+    </span>
   );
 }
 
 function ChipRow({ label, children, className }) {
   return (
-    <div className={cx("mb-3", className)}>
+    <div className={cx("flex items-center gap-2", className)}>
       {label && (
-        <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-stone-500">
+        <span className="w-16 shrink-0 truncate text-[10px] font-bold uppercase tracking-wider text-stone-400">
           {label}
-        </div>
+        </span>
       )}
-      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 sm:-mx-6 sm:px-6">
-        {children}
-      </div>
+      <div className="no-scrollbar -mx-1 flex min-w-0 flex-1 gap-1.5 overflow-x-auto px-1 pb-0.5">{children}</div>
     </div>
   );
 }
@@ -102,10 +121,10 @@ function Chip({ active, onClick, children, title }) {
       aria-pressed={!!active}
       onClick={onClick}
       className={cx(
-        "shrink-0 rounded-full border px-4 py-2.5 text-sm font-medium transition duration-150 active:scale-[0.98]",
+        "shrink-0 rounded-lg border px-3 py-1.5 text-[13px] font-medium transition duration-150 active:scale-[0.98]",
         active
           ? "border-red-700 bg-red-700 text-white shadow-sm"
-          : "border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
+          : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50"
       )}
     >
       {children}
@@ -113,7 +132,34 @@ function Chip({ active, onClick, children, title }) {
   );
 }
 
-function Segmented({ items, value, onChange, className }) {
+function Segmented({ items, value, onChange, className, inline }) {
+  if (inline) {
+    // Dạng nằm trong hàng cuộn ngang (không chiếm thêm hàng riêng)
+    return (
+      <div
+        className={cx("flex w-max shrink-0 items-center gap-1 rounded-xl bg-stone-200/70 p-1", className)}
+        role="tablist"
+      >
+        {items.map(([k, l]) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={value === k}
+            onClick={() => onChange(k)}
+            className={cx(
+              "whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[13px] leading-tight transition duration-150",
+              value === k
+                ? "bg-white font-semibold text-red-700 shadow-sm"
+                : "font-medium text-stone-600 hover:text-stone-900"
+            )}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+    );
+  }
   return (
     <div
       className={cx("grid gap-1 rounded-xl bg-stone-200/70 p-1", className)}
@@ -128,7 +174,7 @@ function Segmented({ items, value, onChange, className }) {
           aria-selected={value === k}
           onClick={() => onChange(k)}
           className={cx(
-            "min-h-10 rounded-lg px-1 py-2 text-center text-[13px] leading-tight transition duration-150 sm:text-sm",
+            "min-h-8 rounded-lg px-1 py-1.5 text-center text-[13px] leading-tight transition duration-150 sm:text-sm",
             value === k
               ? "bg-white font-semibold text-red-700 shadow-sm"
               : "font-medium text-stone-600 hover:text-stone-900"
@@ -222,30 +268,14 @@ function KanaSection() {
 
   return (
     <div style={JP}>
-      <PageHeader
-        title="Học bảng chữ cái tiếng Nhật"
-        desc="Hiragana & Katakana — nghe, nhận diện và gõ romaji"
-        count={`${pool.length} chữ`}
-      />
-
-      <ChipRow label="Loại chữ">
-        {Object.entries(SCRIPTS).map(([id, n]) => (
-          <Chip key={id} active={scripts.includes(id)} onClick={() => toggle(scripts, setScripts, id)}>
-            {n}
-          </Chip>
-        ))}
-      </ChipRow>
-
-      <ChipRow label="Nhóm âm">
-        {GROUPS.map((g) => (
-          <Chip key={g.id} active={groups.includes(g.id)} onClick={() => toggle(groups, setGroups, g.id)}>
-            {g.name}
-          </Chip>
-        ))}
-      </ChipRow>
+    <Toolbar
+      title="Học bảng chữ cái tiếng Nhật"
+      desc="Hiragana & Katakana — nghe, nhận diện và gõ romaji"
+      count={`${pool.length} chữ`}
+      >
 
       <Segmented
-        className="mb-5"
+        inline
         items={[
           ["chart", "Bảng chữ"],
           ["quiz", "Trắc nghiệm"],
@@ -254,6 +284,24 @@ function KanaSection() {
         value={mode}
         onChange={setMode}
       />
+      <Sep />
+      <Group>
+        {Object.entries(SCRIPTS).map(([id, n]) => (
+          <Chip key={id} active={scripts.includes(id)} onClick={() => toggle(scripts, setScripts, id)}>
+            {n}
+          </Chip>
+        ))}
+      </Group>
+      <Sep />
+      <Group>
+        {GROUPS.map((g) => (
+          <Chip key={g.id} active={groups.includes(g.id)} onClick={() => toggle(groups, setGroups, g.id)}>
+            {g.name}
+          </Chip>
+        ))}
+      </Group>
+    </Toolbar>
+
 
       {mode === "chart" && <Chart scripts={scripts} groups={groups} />}
       {mode === "quiz" && <Quiz key={key} pool={pool} />}
@@ -620,25 +668,13 @@ function KanjiSection() {
   );
   return (
     <div style={JP}>
-      <PageHeader
-        title="Hán tự · Từ Hán Nhật"
-        desc="Chữ Hán, âm Hán Việt, âm On/Kun và mẹo ghi nhớ"
-        count={`${pool.length}/${DATA.length}`}
-      />
-
-      <ChipRow label="Phạm vi">
-        {[["kanji", "Hán tự"], ["rad", "Bộ thủ"], ["all", "Tất cả"]].map(([k, l]) => (
-          <Chip key={k} active={scope === k} onClick={() => setScope(k)}>
-            {l}
-            <span className={cx("ml-1.5 text-xs", scope === k ? "text-red-100" : "text-stone-400")}>
-              {k === "kanji" ? DATA.filter((w) => !w.rad).length : k === "rad" ? DATA.filter((w) => w.rad).length : DATA.length}
-            </span>
-          </Chip>
-        ))}
-      </ChipRow>
-
+    <Toolbar
+      title="Hán tự · Từ Hán Nhật"
+      desc="Chữ Hán, âm Hán Việt, âm On/Kun và mẹo ghi nhớ"
+      count={`${pool.length}/${DATA.length}`}
+    >
       <Segmented
-        className="mb-5"
+        inline
         items={[
           ["list", "Danh sách"],
           ["card", "Flashcard"],
@@ -647,6 +683,19 @@ function KanjiSection() {
         value={mode}
         onChange={setMode}
       />
+      <Sep />
+      <Group>
+        {[["kanji", "Hán tự"], ["rad", "Bộ thủ"], ["all", "Tất cả"]].map(([k, l]) => (
+          <Chip key={k} active={scope === k} onClick={() => setScope(k)}>
+            {l}
+            <span className={cx("ml-1.5 text-xs", scope === k ? "text-red-100" : "text-stone-400")}>
+              {k === "kanji" ? DATA.filter((w) => !w.rad).length : k === "rad" ? DATA.filter((w) => w.rad).length : DATA.length}
+            </span>
+          </Chip>
+        ))}
+      </Group>
+    </Toolbar>
+
 
       {mode === "list" && <ListView key={scope} pool={pool} />}
       {mode === "card" && <CardView key={scope} pool={pool} />}
@@ -1328,16 +1377,20 @@ function NumSection() {
   const [t, setT] = useState("basic");
   return (
     <div style={JP}>
-      <PageHeader
-        title="Cách đọc số trong tiếng Nhật"
-        desc="Số đếm, số lớn, ngày tháng, giờ, tuổi và lượng từ"
-        count={`${TABS.length} phần`}
-      />
-      <ChipRow label="Chọn phần học" className="mb-5">
+    <Toolbar
+      title="Cách đọc số trong tiếng Nhật"
+      desc="Số đếm, số lớn, ngày tháng, giờ, tuổi và lượng từ"
+      count={`${TABS.length} phần`}
+    >
+      <Group>
         {TABS.map(([k, l]) => (
-          <Chip key={k} active={t === k} onClick={() => setT(k)}>{l}</Chip>
+          <Chip key={k} active={t === k} onClick={() => setT(k)}>
+            {l}
+          </Chip>
         ))}
-      </ChipRow>
+      </Group>
+    </Toolbar>
+
       {t === "basic" && <NumBasic />}
       {t === "tool" && <NumTool />}
       {t === "date" && <NumDate />}
@@ -1413,13 +1466,23 @@ function VocabSection() {
 
   return (
     <div style={JP}>
-      <PageHeader
-        title="Từ vựng N5"
-        desc="Từ vựng cơ bản theo loại từ và chủ đề — nghe, lật thẻ, trắc nghiệm"
-        count={`${pool.length}/${VDATA.length} từ`}
+    <Toolbar
+      title="Từ vựng N5"
+      desc="Từ vựng cơ bản theo loại từ và chủ đề — nghe, lật thẻ, trắc nghiệm"
+      count={`${pool.length}/${VDATA.length} từ`}
+    >
+      <Segmented
+        inline
+        items={[
+          ["list", "Danh sách"],
+          ["card", "Flashcard"],
+          ["quiz", "Trắc nghiệm"],
+        ]}
+        value={mode}
+        onChange={setMode}
       />
-
-      <ChipRow label="Loại từ">
+      <Sep />
+      <Group label="Loại từ">
         {["Tất cả", ...CATS].map((c) => (
           <Chip
             key={c}
@@ -1432,9 +1495,9 @@ function VocabSection() {
             </span>
           </Chip>
         ))}
-      </ChipRow>
-
-      <ChipRow label="Chủ đề" className="mb-4">
+      </Group>
+      <Sep />
+      <Group label="Chủ đề">
         {["Tất cả", ...TOPIC_NAMES].filter((t) => t === "Tất cả" || topicCount[t]).map((t) => (
           <Chip key={t} active={topic === t} onClick={() => setTopic(t)}>
             {t}
@@ -1443,18 +1506,9 @@ function VocabSection() {
             </span>
           </Chip>
         ))}
-      </ChipRow>
+      </Group>
+    </Toolbar>
 
-      <Segmented
-        className="mb-5"
-        items={[
-          ["list", "Danh sách"],
-          ["card", "Flashcard"],
-          ["quiz", "Trắc nghiệm"],
-        ]}
-        value={mode}
-        onChange={setMode}
-      />
 
       {mode === "list" && (
         <VListView key={poolKey} pool={pool} q={q} setQ={setQ} hide={hide} setHide={setHide} revealed={revealed} setRevealed={setRevealed} />

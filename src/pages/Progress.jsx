@@ -246,11 +246,79 @@ function Bar({ label, value, total, color = "bg-red-500" }) {
   );
 }
 
+// Công tắc bật/tắt kiểu hệ thống (iOS/Android)
+function Switch({ on, onChange, label }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={onChange}
+      className={cx(
+        "relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200",
+        on ? "bg-red-600" : "bg-stone-300"
+      )}
+    >
+      <span
+        className={cx(
+          "absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+          on && "translate-x-5"
+        )}
+      />
+    </button>
+  );
+}
+
+// Mũi tên phải (mở rộng) / xoay lên khi đang mở
+function Chev({ up }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className={cx("h-4 w-4 shrink-0 text-stone-400 transition-transform duration-200", up && "rotate-90")}
+    >
+      <path
+        fillRule="evenodd"
+        d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+// Một dòng trong nhóm cài đặt: icon + nhãn (hoặc mô tả) bên trái, điều khiển bên phải
+function Row({ icon, label, desc, onClick, right, danger }) {
+  const inner = (
+    <>
+      {icon && <span aria-hidden="true" className="w-5 shrink-0 text-center text-base leading-none">{icon}</span>}
+      <span className="min-w-0 flex-1">
+        <span className={cx("block truncate text-sm font-medium", danger ? "text-red-600" : "text-stone-800")}>
+          {label}
+        </span>
+        {desc && <span className="mt-0.5 block truncate text-xs text-stone-400">{desc}</span>}
+      </span>
+      {right}
+    </>
+  );
+  const cls =
+    "flex w-full items-center gap-3 border-t border-stone-100 px-4 py-3.5 text-left transition first:border-t-0";
+  return onClick ? (
+    <button type="button" onClick={onClick} className={cx(cls, "hover:bg-stone-50 active:bg-stone-100")}>
+      {inner}
+    </button>
+  ) : (
+    <div className={cls}>{inner}</div>
+  );
+}
+
 export default function Progress() {
   const p = useProfile();
   const [reviewing, setReviewing] = useState(false);
   const fileRef = useRef(null);
   const [msg, setMsg] = useState("");
+  const [goalOpen, setGoalOpen] = useState(false);
 
   const streak = calcStreak(p.days);
   const studySec = p.timeSec?.[todayStr()] || 0;
@@ -449,75 +517,100 @@ export default function Progress() {
       )}
 
       {/* Cài đặt */}
-      <section className="fade-up delay-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-500">Cài đặt</h3>
-        <div className="mt-3">
-          <div className="text-xs font-medium text-stone-600">Mục tiêu mỗi ngày</div>
-          <div className="mt-1.5 flex gap-2">
-            {[5, 10, 20, 50].map((g) => (
-              <button
-                key={g}
-                type="button"
-                onClick={() => setSetting("goal", g)}
-                className={cx(
-                  "flex-1 rounded-xl border py-2.5 text-sm font-semibold transition duration-150 active:scale-95",
-                  goal === g
-                    ? "border-red-500 bg-red-50 text-red-700"
-                    : "border-stone-200 bg-white text-stone-600 hover:border-red-200 hover:bg-red-50/40"
-                )}
-              >
-                {g} lượt
-              </button>
-            ))}
-          </div>
+      <section className="fade-up delay-4">
+        <div className="mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-500">Cài đặt</h3>
+          <div className="h-px flex-1 bg-stone-200" />
         </div>
-        <div className="mt-4">
-          <div className="text-xs font-medium text-stone-600">Thông báo thành tựu</div>
-          <div className="mt-1.5 flex gap-2">
-            {[
-              ["achFx", "✨ Hiệu ứng"],
-              ["achSfx", "🔔 Âm thanh"],
-            ].map(([k, l]) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setSetting(k, !p.settings[k])}
-                className={cx(
-                  "flex-1 rounded-xl border py-2.5 text-sm font-semibold transition duration-150 active:scale-95",
-                  p.settings[k]
-                    ? "border-red-500 bg-red-50 text-red-700"
-                    : "border-stone-200 bg-white text-stone-600 hover:border-red-200 hover:bg-red-50/40"
-                )}
-              >
-                {l}
-              </button>
-            ))}
+
+        {/* Học tập */}
+        <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+          <div className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+            Học tập
           </div>
+          <Row
+            icon="🎯"
+            label="Mục tiêu mỗi ngày"
+            onClick={() => setGoalOpen((v) => !v)}
+            right={
+              <span className="flex shrink-0 items-center gap-1.5 text-sm font-semibold text-stone-500">
+                {goal} lượt
+                <Chev up={goalOpen} />
+              </span>
+            }
+          />
+          {goalOpen && (
+            <div className="grid grid-cols-4 gap-2 border-t border-stone-100 bg-stone-50/70 px-4 py-3">
+              {[5, 10, 20, 50].map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => {
+                    setSetting("goal", g);
+                    setGoalOpen(false);
+                  }}
+                  className={cx(
+                    "rounded-lg border py-2 text-sm font-semibold transition duration-150 active:scale-95",
+                    goal === g
+                      ? "border-red-600 bg-red-600 text-white shadow-sm"
+                      : "border-stone-200 bg-white text-stone-600 hover:border-red-300 hover:text-red-700"
+                  )}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-2 border-t border-stone-100 pt-4">
-          <button
-            type="button"
-            onClick={onExport}
-            className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm font-medium text-stone-700 transition hover:bg-stone-50 active:scale-[0.98]"
-          >
-            Xuất tiến độ
-          </button>
-          <button
-            type="button"
+
+        {/* Thông báo */}
+        <div className="mt-3 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+          <div className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+            Thông báo
+          </div>
+          <Row
+            icon="✨"
+            label="Hiệu ứng thành tựu"
+            desc="Bay vào và phát sáng khi mở khóa"
+            right={
+              <Switch
+                on={!!p.settings.achFx}
+                label="Hiệu ứng thành tựu"
+                onChange={() => setSetting("achFx", !p.settings.achFx)}
+              />
+            }
+          />
+          <Row
+            icon="🔔"
+            label="Âm thanh"
+            desc="Tiếng báo khi có thành tựu mới"
+            right={
+              <Switch
+                on={!!p.settings.achSfx}
+                label="Âm thanh"
+                onChange={() => setSetting("achSfx", !p.settings.achSfx)}
+              />
+            }
+          />
+        </div>
+
+        {/* Dữ liệu */}
+        <div className="mt-3 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+          <div className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+            Dữ liệu
+          </div>
+          <Row icon="⬇️" label="Xuất tiến độ" desc="Tải file JSON về máy" onClick={onExport} right={<Chev />} />
+          <Row
+            icon="⬆️"
+            label="Nhập tiến độ"
+            desc="Nạp từ file JSON đã xuất"
             onClick={() => fileRef.current?.click()}
-            className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm font-medium text-stone-700 transition hover:bg-stone-50 active:scale-[0.98]"
-          >
-            Nhập tiến độ
-          </button>
+            right={<Chev />}
+          />
+          <Row icon="🗑️" label="Xoá toàn bộ tiến độ" danger onClick={onReset} right={<Chev />} />
           <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={onImportFile} />
-          <button
-            type="button"
-            onClick={onReset}
-            className="col-span-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700 transition hover:bg-red-100 active:scale-[0.98]"
-          >
-            Xóa toàn bộ tiến độ
-          </button>
         </div>
+
         {msg && <p className="mt-3 text-center text-xs text-emerald-700">{msg}</p>}
       </section>
     </div>
