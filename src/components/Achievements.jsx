@@ -84,32 +84,32 @@ export function AchievementToast() {
       {shown.map((a) => (
         <div
           key={a.id}
-          className={`pointer-events-none relative flex items-center gap-3 rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-3 shadow-lg ${fx ? "ach-pop" : ""}`}
+          className={`pointer-events-none relative flex items-center gap-3 rounded-xl border-2 border-[var(--warning)] bg-[var(--warning-soft)] px-4 py-3 shadow-lg ${fx ? "ach-pop" : ""}`}
         >
           <button
             type="button"
             onClick={dismissFresh}
             aria-label="Đóng thông báo"
-            className="pointer-events-auto absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-amber-400 text-xs font-bold text-amber-900 shadow hover:bg-amber-500"
+            className="pointer-events-auto absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--warning)] text-xs font-bold text-[var(--warning)] shadow hover:bg-[var(--warning)]"
           >
             ✕
           </button>
           <div className="ach-ico text-3xl">{a.icon}</div>
           <div className="min-w-0 flex-1">
-            <div className="text-xs font-semibold text-amber-700">🏆 Thành tựu mới · +{a.pts} điểm</div>
+            <div className="text-xs font-semibold text-[var(--warning)]">🏆 Thành tựu mới · +{a.pts} điểm</div>
             <div className="font-bold">{a.name}</div>
-            <div className="text-xs text-stone-600">{a.desc}</div>
+            <div className="text-xs text-[var(--text-muted)]">{a.desc}</div>
           </div>
         </div>
       ))}
-      {fresh.length > 3 && <div className="text-center text-xs text-stone-500">và {fresh.length - 3} thành tựu khác</div>}
+      {fresh.length > 3 && <div className="text-center text-xs text-[var(--text-muted)]">và {fresh.length - 3} thành tựu khác</div>}
     </div>
   );
 }
 
 const chip = (on) =>
   `rounded-full border px-3 py-1.5 text-sm whitespace-nowrap transition ${
-    on ? "border-red-600 bg-red-600 text-white" : "border-stone-200 bg-white text-stone-600 hover:border-red-200 hover:bg-red-50/40"
+    on ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--on-brand)]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--brand)]/30 hover:bg-[var(--brand-soft)]/40"
   }`;
 
 export function AchievementsPanel() {
@@ -128,26 +128,26 @@ export function AchievementsPanel() {
   if (only === "todo") list = [...list].sort((a, b) => pct(b) - pct(a));
 
   return (
-    <section className="fade-up delay-3 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+    <section className="fade-up delay-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
       <div className="flex items-center gap-3">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-amber-400 bg-amber-100 text-2xl font-bold text-amber-800">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[var(--warning)] bg-[var(--warning-soft)] text-2xl font-bold text-[var(--warning)]">
           {lv.level}
         </div>
         <div className="flex-1">
           <div className="font-semibold">
             Cấp {lv.level} · {lv.title}
           </div>
-          <div className="my-1 h-2.5 overflow-hidden rounded-full bg-stone-200">
-            <div className="h-full bg-amber-500" style={{ width: `${lv.pct}%` }} />
+          <div className="my-1 h-2.5 overflow-hidden rounded-full bg-[var(--surface-2)]">
+            <div className="h-full bg-[var(--warning)]" style={{ width: `${lv.pct}%` }} />
           </div>
-          <div className="text-xs text-stone-500">
+          <div className="text-xs text-[var(--text-muted)]">
             {pts} điểm · còn {lv.to - pts} điểm để lên cấp {lv.level + 1}
           </div>
         </div>
       </div>
 
       <div className="mt-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-500">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">
           Thành tựu ({done.length}/{ACH.length})
         </h3>
         <div className="flex gap-1 text-xs">
@@ -161,7 +161,7 @@ export function AchievementsPanel() {
               type="button"
               onClick={() => setOnly(k)}
               className={`rounded-md px-2.5 py-1 whitespace-nowrap ${
-                only === k ? "bg-stone-800 text-white" : "bg-stone-100 text-stone-600"
+                only === k ? "bg-[var(--text)] text-[var(--bg)]" : "bg-[var(--surface-2)] text-[var(--text-muted)]"
               }`}
             >
               {l}
@@ -185,25 +185,25 @@ export function AchievementsPanel() {
           return (
             <div
               key={a.id}
-              className={`flex gap-3 rounded-xl border p-3 ${at ? "border-amber-400 bg-amber-50" : "border-stone-200 bg-stone-50"}`}
+              className={`flex gap-3 rounded-xl border p-3 ${at ? "border-[var(--warning)] bg-[var(--warning-soft)]" : "border-[var(--border)] bg-[var(--surface-2)]"}`}
             >
               <div className={`w-10 text-center text-3xl ${at ? "" : "opacity-50 grayscale"}`}>{a.icon}</div>
               <div className="min-w-0 flex-1">
                 <div className="flex justify-between gap-2">
                   <span className="text-sm font-semibold">{a.name}</span>
-                  <span className="text-xs text-stone-500">{a.pts}đ</span>
+                  <span className="text-xs text-[var(--text-muted)]">{a.pts}đ</span>
                 </div>
-                <div className="text-xs text-stone-600">{a.desc}</div>
+                <div className="text-xs text-[var(--text-muted)]">{a.desc}</div>
                 {at ? (
-                  <div className="mt-1 text-xs text-amber-700">
+                  <div className="mt-1 text-xs text-[var(--warning)]">
                     ✓ Mở ngày {new Date(at).toLocaleDateString("vi-VN")}
                   </div>
                 ) : (
                   <div className="mt-1.5">
-                    <div className="h-1.5 overflow-hidden rounded-full bg-stone-200">
-                      <div className="h-full bg-red-500" style={{ width: `${pct(a)}%` }} />
+                    <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]">
+                      <div className="h-full bg-[var(--brand)]" style={{ width: `${pct(a)}%` }} />
                     </div>
-                    <div className="mt-0.5 text-xs text-stone-500">
+                    <div className="mt-0.5 text-xs text-[var(--text-muted)]">
                       {hint || `${Math.min(a.get(m), a.target)}${a.unit || ""}/${a.target}${a.unit || ""}`}
                     </div>
                   </div>
@@ -213,7 +213,7 @@ export function AchievementsPanel() {
           );
         })}
         {list.length === 0 && (
-          <p className="col-span-full py-4 text-center text-sm text-stone-500">Không có thành tựu nào ở mục này.</p>
+          <p className="col-span-full py-4 text-center text-sm text-[var(--text-muted)]">Không có thành tựu nào ở mục này.</p>
         )}
       </div>
     </section>

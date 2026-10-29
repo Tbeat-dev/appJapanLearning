@@ -10,11 +10,13 @@ const DEFAULT_P = {
   timeSec: {},
   ach: {},
   flags: {},
+  lessons: {},
+  write: {},
   combo: 0,
   bestCombo: 0,
   cleared: 0,
   goalDays: 0,
-  settings: { goal: 10, achFx: true, achSfx: false },
+  settings: { goal: 10, achFx: true, achSfx: false, theme: "system", furigana: true, sound: true },
 };
 
 const fmtDate = (d) =>
@@ -28,6 +30,8 @@ const mergeP = (p) => ({
   timeSec: { ...DEFAULT_P.timeSec, ...(p.timeSec || {}) },
   ach: { ...(p.ach || {}) },
   flags: { ...(p.flags || {}) },
+  lessons: { ...(p.lessons || {}) },
+  write: { ...(p.write || {}) },
   settings: { ...DEFAULT_P.settings, ...(p.settings || {}) },
 });
 
@@ -173,6 +177,20 @@ function setSetting(k, v) {
   setP((p) => ({ ...p, settings: { ...p.settings, [k]: v } }));
 }
 
+function setLesson(id, patch) {
+  setP((p) => ({
+    ...p,
+    lessons: { ...p.lessons, [id]: { ...(p.lessons[id] || {}), ...patch } },
+  }));
+}
+
+// Điểm viết (WritingPad) cao nhất theo từng chữ — chỉ giữ giá trị lớn hơn
+function setWriteScore(ch, score) {
+  if (!ch || !(score > 0)) return;
+  if (((P.write || {})[ch] || 0) >= score) return;
+  setP((p) => ({ ...p, write: { ...(p.write || {}), [ch]: score } }));
+}
+
 function importP(json) {
   setP(() => mergeP(json), { silent: true });
 }
@@ -190,6 +208,8 @@ function resetP() {
     days: {},
     stats: {},
     timeSec: {},
+    lessons: {},
+    write: {},
     settings: { ...DEFAULT_P.settings },
   }));
 }
@@ -205,24 +225,9 @@ function calcStreak(days) {
   return n;
 }
 
-function logStudy(seconds) {
-  if (!seconds || seconds < 1) return;
-  const s = Math.round(seconds);
-  setP((p) => {
-    const t = todayStr();
-    return bump({
-      ...p,
-      timeSec: { ...p.timeSec, [t]: (p.timeSec[t] || 0) + s },
-    });
-  });
-}
-
 export {
-  LS_KEY,
-  DEFAULT_P,
   fmtDate,
   todayStr,
-  mergeP,
   setP,
   getP,
   useProfile,
@@ -230,11 +235,12 @@ export {
   record,
   markRemembered,
   setSetting,
+  setLesson,
+  setWriteScore,
   importP,
   applyProgress,
   resetP,
   calcStreak,
-  logStudy,
   dismissFresh,
   flushPending,
 };

@@ -1,5 +1,5 @@
 {
-  "name": "kanalearn",
+  "name": "hiratalearn",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -15,6 +15,7 @@
     "db:build": "npm run db:seed && npm run db:export"
   },
   "dependencies": {
+    "lucide-react": "^1.62.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

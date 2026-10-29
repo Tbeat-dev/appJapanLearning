@@ -1,3 +1,6 @@
+import { Check } from "lucide-react";
+import Button from "./common/Button.jsx";
+
 const cx = (...a) => a.filter(Boolean).join(" ");
 
 export const PROFILE_KEY = "kanalearn.profile";
@@ -33,7 +36,6 @@ export const loadProfile = () => {
 export const saveProfile = (p) => {
   try {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
-    // Báo cho các nơi đang hiển thị hồ sơ (vd: thanh trên cùng) cập nhật lại
     window.dispatchEvent(new Event("profile:updated"));
   } catch {
     /* ignore quota */
@@ -42,155 +44,164 @@ export const saveProfile = (p) => {
 
 export const profileDone = (p) => !!(p && p.name && p.avatar && p.goal && p.level && p.daily);
 
-// 4 bước lập hồ sơ + khối xác nhận — dùng chung cho trang Hồ sơ và popup mở đầu
-// compact: dạng các trường phẳng trong khung đăng nhập (không có nền/thẻ lồng nhau)
-export default function ProfileSetup({ p, set, done, saved, onView, onLearn, actions = true, compact = false }) {
-  const box = (delay = "") =>
-    compact
-      ? "fade-up space-y-5 border-b border-stone-100 pb-5 last:border-0 last:pb-0"
-      : `fade-up ${delay} rounded-2xl border border-stone-200 bg-white p-5 shadow-sm`;
+function Section({ step, title, children, className = "" }) {
+  return (
+    <section
+      className={cx(
+        "rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-1)]",
+        className
+      )}
+    >
+      <h2 className="text-[var(--fs-tiny)] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+        {step}
+      </h2>
+      <p className="mt-1 text-[var(--fs-h3)] font-bold text-[var(--text)]">{title}</p>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+/**
+ * 4 trường hồ sơ — dùng cho trang Hồ sơ (chỉnh sửa).
+ * Onboarding có wizard riêng; component này không hiển thị nút chính.
+ */
+export default function ProfileSetup({ p, set, done, saved, onView, onLearn, actions = true }) {
   return (
     <>
-      {/* Avatar + tên */}
-      <section className={box()}>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-500">1 · Hình đại diện &amp; tên</h2>
-        <div className="mt-3 flex flex-wrap gap-2" role="radiogroup" aria-label="Chọn avatar">
+      <Section step="1 · Hình ảnh" title="Avatar & tên">
+        <div role="radiogroup" aria-label="Chọn avatar" className="grid grid-cols-6 gap-2">
           {AVATARS.map((a) => (
             <button
               key={a}
               type="button"
               role="radio"
               aria-checked={p.avatar === a}
+              aria-label={`Avatar ${a}`}
               onClick={() => set("avatar", a)}
               className={cx(
-                "flex h-11 w-11 items-center justify-center rounded-xl border text-xl transition duration-150 active:scale-95",
+                "flex aspect-square items-center justify-center rounded-[var(--radius-md)] border-2 text-xl transition duration-150 active:scale-95",
                 p.avatar === a
-                  ? "border-red-500 bg-red-50 shadow-sm"
-                  : "border-stone-200 bg-white hover:border-red-200 hover:bg-red-50/50"
+                  ? "border-[var(--brand)] bg-[var(--brand-soft)]"
+                  : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--brand)]/40"
               )}
             >
               {a}
             </button>
           ))}
         </div>
+        <label htmlFor="pf-name" className="mt-4 block text-sm font-semibold text-[var(--text)]">
+          Tên
+        </label>
         <input
+          id="pf-name"
           value={p.name || ""}
           onChange={(e) => set("name", e.target.value.slice(0, 30))}
-          placeholder="Tên của bạn (vd: Thịnh)"
+          placeholder="Tên của bạn"
           maxLength={30}
-          className="mt-4 w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100"
+          className="mt-1.5 h-12 w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-4 text-[var(--fs-body)] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
         />
-      </section>
+      </Section>
 
-      {/* Mục tiêu */}
-      <section className={box("delay-1")}>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-500">2 · Mục tiêu học</h2>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {GOALS.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              onClick={() => set("goal", g.id)}
-              className={cx(
-                "rounded-xl border p-3.5 text-left transition duration-150 active:scale-[0.98]",
-                p.goal === g.id
-                  ? "border-red-500 bg-red-50 shadow-sm"
-                  : "border-stone-200 bg-white hover:border-red-200 hover:bg-red-50/40"
-              )}
-            >
-              <div className="text-sm font-bold text-stone-900">{g.label}</div>
-              <div className="mt-0.5 text-xs text-stone-500">{g.desc}</div>
-            </button>
-          ))}
+      <Section step="2 · Mục tiêu" title="Học theo hướng nào?" className="mt-3">
+        <div role="radiogroup" aria-label="Mục tiêu học" className="grid gap-2 sm:grid-cols-2">
+          {GOALS.map((g) => {
+            const on = p.goal === g.id;
+            return (
+              <button
+                key={g.id}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => set("goal", g.id)}
+                className={cx(
+                  "rounded-[var(--radius-md)] border-2 p-3.5 text-left transition duration-150 active:scale-[0.98]",
+                  on
+                    ? "border-[var(--brand)] bg-[var(--brand-soft)]"
+                    : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--brand)]/35"
+                )}
+              >
+                <div className="text-sm font-bold text-[var(--text)]">{g.label}</div>
+                <div className="mt-0.5 text-xs text-[var(--text-muted)]">{g.desc}</div>
+              </button>
+            );
+          })}
         </div>
-      </section>
+      </Section>
 
-      {/* Trình độ */}
-      <section className={box("delay-2")}>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-500">3 · Trình độ hiện tại</h2>
-        <div className="mt-3 flex flex-col gap-2">
-          {LEVELS.map((l) => (
-            <button
-              key={l.id}
-              type="button"
-              onClick={() => set("level", l.id)}
-              className={cx(
-                "flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition duration-150 active:scale-[0.98]",
-                p.level === l.id
-                  ? "border-red-500 bg-red-50 shadow-sm"
-                  : "border-stone-200 bg-white hover:border-red-200 hover:bg-red-50/40"
-              )}
-            >
-              <span>
-                <span className="block text-sm font-semibold text-stone-900">{l.label}</span>
-                <span className="block text-xs text-stone-500">{l.desc}</span>
-              </span>
-              {p.level === l.id && <span className="text-red-600">✓</span>}
-            </button>
-          ))}
+      <Section step="3 · Trình độ" title="Bạn đã biết gì?" className="mt-3">
+        <div role="radiogroup" aria-label="Trình độ hiện tại" className="flex flex-col gap-2">
+          {LEVELS.map((l) => {
+            const on = p.level === l.id;
+            return (
+              <button
+                key={l.id}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => set("level", l.id)}
+                className={cx(
+                  "flex items-center justify-between gap-3 rounded-[var(--radius-md)] border-2 px-4 py-3 text-left transition duration-150 active:scale-[0.98]",
+                  on
+                    ? "border-[var(--brand)] bg-[var(--brand-soft)]"
+                    : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--brand)]/35"
+                )}
+              >
+                <span>
+                  <span className="block text-sm font-bold text-[var(--text)]">{l.label}</span>
+                  <span className="block text-xs text-[var(--text-muted)]">{l.desc}</span>
+                </span>
+                {on && <Check aria-hidden="true" className="h-5 w-5 shrink-0 text-[var(--brand)]" strokeWidth={2.5} />}
+              </button>
+            );
+          })}
         </div>
-      </section>
+      </Section>
 
-      {/* Thời gian */}
-      <section className={box("delay-3")}>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-500">4 · Mỗi ngày học bao lâu?</h2>
-        <div className="mt-3 grid grid-cols-4 gap-2">
-          {DAY_GOALS.map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => set("daily", m)}
-              className={cx(
-                "flex flex-col items-center rounded-xl border py-3 transition duration-150 active:scale-95",
-                p.daily === m
-                  ? "border-red-500 bg-red-50 shadow-sm"
-                  : "border-stone-200 bg-white hover:border-red-200 hover:bg-red-50/40"
-              )}
-            >
-              <span className="text-lg font-bold text-stone-900">{m}</span>
-              <span className="text-[10px] text-stone-500">phút</span>
-            </button>
-          ))}
+      <Section step="4 · Nhịp học" title="Mỗi ngày học bao lâu?" className="mt-3">
+        <div role="radiogroup" aria-label="Thời gian học mỗi ngày" className="grid grid-cols-4 gap-2">
+          {DAY_GOALS.map((m) => {
+            const on = p.daily === m;
+            return (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => set("daily", m)}
+                className={cx(
+                  "flex flex-col items-center rounded-[var(--radius-md)] border-2 py-3 transition duration-150 active:scale-95",
+                  on
+                    ? "border-[var(--brand)] bg-[var(--brand-soft)]"
+                    : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--brand)]/35"
+                )}
+              >
+                <span className={cx("text-lg font-bold", on ? "text-[var(--brand)]" : "text-[var(--text)]")}>{m}</span>
+                <span className="text-[10px] text-[var(--text-muted)]">phút</span>
+              </button>
+            );
+          })}
         </div>
-      </section>
+      </Section>
 
-      {/* Hoàn thành */}
-      <section className={compact ? "fade-up" : "fade-up delay-4"}>
+      <section className="mt-4">
         {done ? (
-          compact ? (
-            <div className="text-center">
-              <p className="text-sm font-semibold text-emerald-600">✓ Hồ sơ đã hoàn tất</p>
-              {saved && <p className="mt-1 text-[11px] text-emerald-600">✓ Tự lưu trên máy bạn</p>}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center">
-              <p className="text-sm font-semibold text-emerald-800">✓ Hồ sơ đã hoàn tất</p>
-              {actions && (
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                  <button
-                    type="button"
-                    onClick={() => onView?.()}
-                    className="flex-1 rounded-xl border border-emerald-300 bg-white px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 active:scale-[0.98]"
-                  >
-                    Xem hồ sơ &amp; tiến độ →
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onLearn?.()}
-                    className="flex-1 rounded-xl bg-red-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-800 active:scale-[0.98]"
-                  >
-                    Bắt đầu học →
-                  </button>
-                </div>
-              )}
-              {saved && <p className="mt-2 text-[11px] text-emerald-600">✓ Tự lưu trên máy bạn</p>}
-            </div>
-          )
-        ) : compact ? (
-          <p className="text-center text-xs text-stone-400">Điền đủ 4 bước để mở app</p>
+          <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--success-soft)] p-4 text-center">
+            <p className="text-sm font-semibold text-[var(--success)]">✓ Hồ sơ đã hoàn tất</p>
+            {actions && (
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <Button variant="secondary" onClick={() => onView?.()} className="flex-1">
+                  Xem hồ sơ &amp; tiến độ
+                </Button>
+                <Button onClick={() => onLearn?.()} className="flex-1">
+                  Bắt đầu học
+                </Button>
+              </div>
+            )}
+            {saved && <p className="mt-2 text-[11px] text-[var(--success)]">✓ Tự lưu trên máy bạn</p>}
+          </div>
         ) : (
-          <div className="rounded-2xl border border-stone-200 bg-white p-4 text-center">
-            <p className="text-sm text-stone-500">Hoàn thành 4 bước ở trên để lưu hồ sơ.</p>
+          <div className="rounded-[var(--radius-lg)] border border-dashed border-[var(--border)] bg-[var(--surface)] p-4 text-center">
+            <p className="text-sm text-[var(--text-muted)]">Hoàn thành 4 bước ở trên để lưu hồ sơ.</p>
           </div>
         )}
       </section>

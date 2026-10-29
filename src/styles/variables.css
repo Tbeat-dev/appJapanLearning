@@ -1,0 +1,171 @@
+/* Design tokens — UI_DESIGN_RULES.md mục 2–4. Không dùng giá trị ngoài file này. */
+
+:root {
+  color-scheme: light;
+
+  /* 2.1 Thương hiệu & giao diện (sáng) */
+  --brand: #C1121F;
+  --brand-hover: #A50F1A;
+  --brand-soft: #FCE8EA;
+  --on-brand: #FFFFFF;
+  --bg: #F7F6F4;
+  --surface: #FFFFFF;
+  --surface-2: #F0EEEB;
+  --border: #E1DDD8;
+  --text: #1B1A19;
+  --text-muted: #5E5A55;
+  --text-faint: #8A857F;
+
+  /* 2.2 Màu ngữ nghĩa */
+  --success: #1E7A46;
+  --success-soft: #E3F3EA;
+  --warning: #8A5A00;
+  --warning-soft: #FFF1D6;
+  --danger: #B42318;
+  --danger-soft: #FDE8E6;
+  --info: #1F5FAE;
+  --info-soft: #E4EEFA;
+
+  /* 2.3 Cấp độ JLPT */
+  --n5: #2E7D5B;
+  --n5-soft: #E3F3EA;
+  --n4: #1F5FAE;
+  --n4-soft: #E4EEFA;
+  --n3: #6B3FA0;
+  --n3-soft: #EFE8F8;
+
+  /* 3.1 Phông chữ */
+  --font-ui: "Be Vietnam Pro", system-ui, "Segoe UI", sans-serif;
+  --font-ja: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-ja-display: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
+
+  /* 3.2 Thang cỡ chữ */
+  --fs-display: clamp(40px, 9vw, 56px);
+  --fs-h1: 28px;
+  --fs-h2: 22px;
+  --fs-h3: 18px;
+  --fs-body: 16px;
+  --fs-small: 14px;
+  --fs-tiny: 12px;
+
+  /* 4 Khoảng cách, bo góc, đổ bóng */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* 5.1 Thanh điều hướng dưới */
+  --nav-h: 64px;
+
+  /* 5.1 Thanh trên cùng (điện thoại) — dùng cho label dính (sticky) */
+  --header-h: 61px;
+}
+
+/* 2.4 Chế độ tối — theo hệ thống, chỉ ghi đè khi không ép Sáng */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --brand: #E5484D;
+    --brand-hover: #F2555A;
+    --brand-soft: #3A1518;
+    --on-brand: #1B1A19;
+    --bg: #121110;
+    --surface: #1C1B19;
+    --surface-2: #262421;
+    --border: #38352F;
+    --text: #F2EFEA;
+    --text-muted: #B5B0A8;
+    --text-faint: #8A857F;
+
+    --success: #5BC48A;
+    --success-soft: #14301F;
+    --warning: #E0A33C;
+    --warning-soft: #3A2A08;
+    --danger: #F27A72;
+    --danger-soft: #3D1512;
+    --info: #6FA3E8;
+    --info-soft: #14243A;
+
+    --n5: #5BC48A;
+    --n5-soft: #14301F;
+    --n4: #6FA3E8;
+    --n4-soft: #14243A;
+    --n3: #B48AE0;
+    --n3-soft: #2A1840;
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45);
+  }
+}
+
+/* Ép tối (cài đặt app) */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --brand: #E5484D;
+  --brand-hover: #F2555A;
+  --brand-soft: #3A1518;
+  --on-brand: #1B1A19;
+  --bg: #121110;
+  --surface: #1C1B19;
+  --surface-2: #262421;
+  --border: #38352F;
+  --text: #F2EFEA;
+  --text-muted: #B5B0A8;
+  --text-faint: #8A857F;
+
+  --success: #5BC48A;
+  --success-soft: #14301F;
+  --warning: #E0A33C;
+  --warning-soft: #3A2A08;
+  --danger: #F27A72;
+  --danger-soft: #3D1512;
+  --info: #6FA3E8;
+  --info-soft: #14243A;
+
+  --n5: #5BC48A;
+  --n5-soft: #14301F;
+  --n4: #6FA3E8;
+  --n4-soft: #14243A;
+  --n3: #B48AE0;
+  --n3-soft: #2A1840;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* Ép sáng (cài đặt app) — bỏ qua prefers-color-scheme */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --brand: #C1121F;
+  --brand-hover: #A50F1A;
+  --brand-soft: #FCE8EA;
+  --on-brand: #FFFFFF;
+  --bg: #F7F6F4;
+  --surface: #FFFFFF;
+  --surface-2: #F0EEEB;
+  --border: #E1DDD8;
+  --text: #1B1A19;
+  --text-muted: #5E5A55;
+  --text-faint: #8A857F;
+
+  --success: #1E7A46;
+  --success-soft: #E3F3EA;
+  --warning: #8A5A00;
+  --warning-soft: #FFF1D6;
+  --danger: #B42318;
+  --danger-soft: #FDE8E6;
+  --info: #1F5FAE;
+  --info-soft: #E4EEFA;
+
+  --n5: #2E7D5B;
+  --n5-soft: #E3F3EA;
+  --n4: #1F5FAE;
+  --n4-soft: #E4EEFA;
+  --n3: #6B3FA0;
+  --n3-soft: #EFE8F8;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.12);
+}

@@ -1,0 +1,96 @@
+/* CSS nền — UI_DESIGN_RULES.md mục 3, 8, 12. Chỉ dùng token từ variables.css. */
+
+html {
+  -webkit-text-size-adjust: 100%;
+  /* Chặn cuộn ngang: làm tròn lẻ ở zoom 125% / DPR lẻ vẫn sinh thanh cuộn ngang,
+     làm ảnh nền fixed hụt mép đáy. Không phá position:sticky (clip ≠ hidden). */
+  overflow-x: clip;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* 12 — vòng focus rõ ràng, cấm outline:none không thay thế */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* 3.1 — tiếng Nhật luôn lang="ja"; helper cho thẻ lớn */
+:lang(ja) {
+  font-family: var(--font-ja);
+}
+
+.ja-display {
+  font-family: var(--font-ja-display);
+  line-height: 1.7;
+}
+
+.ruby-wrap ruby {
+  ruby-position: over;
+  line-height: 1.7;
+}
+
+.ruby-wrap rt {
+  font-size: var(--fs-tiny);
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* 3.3 — romaji nhỏ/nhạt hơn kana */
+.romaji {
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+/* 12 — ẩn nút nghe khi trình duyệt không hỗ trợ TTS (JS sẽ gắn class này) */
+.tts-unavailable .btn-listen {
+  display: none;
+}
+
+/* 5.1 — vùng an toàn điện thoại cho thanh điều hướng dưới */
+.nav-pad-bottom {
+  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 16px);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 8 — reduced-motion: tắt animation, giữ trạng thái tức thời */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

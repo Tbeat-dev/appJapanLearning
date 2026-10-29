@@ -186,28 +186,28 @@ export default function SyncSection({ incomingCode, onConsumed }) {
   const sum = confirm ? syncSummary(confirm.decoded) : null;
 
   return (
-    <section className="fade-up delay-2 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-      <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-500">
+    <section className="fade-up delay-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
+      <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">
         Đồng bộ & sao lưu
       </h3>
-      <p className="mt-2 text-xs leading-relaxed text-stone-500">
+      <p className="mt-2 text-xs leading-relaxed text-[var(--text-muted)]">
         Tiến trình lưu ngay trên máy bạn. Muốn chuyển sang điện thoại / máy tính khác, tạo một mã
         rồi gửi qua Zalo, email hoặc quét QR — không cần tài khoản, dữ liệu không đi qua máy chủ.
       </p>
 
       {confirm && (
-        <div className="mt-4 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
-          <p className="text-sm font-bold text-amber-900">
+        <div className="mt-4 rounded-2xl border-2 border-[var(--warning)] bg-[var(--warning-soft)] p-4">
+          <p className="text-sm font-bold text-[var(--warning)]">
             Phát hiện tiến trình từ thiết bị khác
             {confirm.fromLink ? " (qua link/QR)" : ""}
           </p>
-          <ul className="mt-2 space-y-1 text-xs text-amber-800">
+          <ul className="mt-2 space-y-1 text-xs text-[var(--warning)]">
             <li>
               <b>{sum.known}</b> mục đã thuộc · <b>{sum.wrong}</b> từ hay sai · <b>{sum.days}</b>{" "}
               ngày học
             </li>
             <li>Lưu lúc: {fmtDate(confirm.decoded.progress.updatedAt)}</li>
-            <li className="text-amber-700">
+            <li className="text-[var(--warning)]">
               Gộp theo kiểu hợp (đã thuộc = hợp hai máy, hay sai & lịch học = số lớn hơn) — không
               mất dữ liệu của máy nào.
             </li>
@@ -216,7 +216,7 @@ export default function SyncSection({ incomingCode, onConsumed }) {
             <button
               type="button"
               onClick={doMerge}
-              className={cx(BTN, "flex-1 bg-amber-600 text-white hover:bg-amber-700")}
+              className={cx(BTN, "flex-1 bg-[var(--warning)] text-[var(--bg)] hover:bg-[var(--warning)]/85")}
             >
               Gộp vào máy này
             </button>
@@ -229,7 +229,7 @@ export default function SyncSection({ incomingCode, onConsumed }) {
               }}
               className={cx(
                 BTN,
-                "border border-amber-300 bg-white text-amber-800 hover:bg-amber-100"
+                "border border-[var(--warning)] bg-[var(--surface)] text-[var(--warning)] hover:bg-[var(--warning-soft)]"
               )}
             >
               Bỏ qua
@@ -240,12 +240,12 @@ export default function SyncSection({ incomingCode, onConsumed }) {
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         {/* Gửi đi */}
-        <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-          <h4 className="text-sm font-bold text-stone-900">1 · Gửi từ máy này</h4>
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+          <h4 className="text-sm font-bold text-[var(--text)]">1 · Gửi từ máy này</h4>
           <button
             type="button"
             onClick={makeCode}
-            className={cx(BTN, "mt-3 w-full bg-red-700 text-white hover:bg-red-800")}
+            className={cx(BTN, "mt-3 w-full bg-[var(--brand)] text-[var(--on-brand)] hover:bg-[var(--brand-hover)]")}
           >
             {code ? "Tạo lại mã đồng bộ" : "Tạo mã đồng bộ"}
           </button>
@@ -256,7 +256,7 @@ export default function SyncSection({ incomingCode, onConsumed }) {
                 value={code}
                 rows={3}
                 onFocus={(e) => e.target.select()}
-                className="mt-3 w-full resize-none rounded-xl border border-stone-200 bg-white p-2.5 font-mono text-[10px] leading-relaxed text-stone-700"
+                className="mt-3 w-full resize-none rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5 font-mono text-[10px] leading-relaxed text-[var(--text)]"
               />
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <button
@@ -264,7 +264,7 @@ export default function SyncSection({ incomingCode, onConsumed }) {
                   onClick={async () =>
                     (await copy(code)) ? say("Đã sao chép mã ✓") : say("Sao chép thất bại", true)
                   }
-                  className={cx(BTN, "border border-stone-300 bg-white text-stone-700 hover:bg-stone-100")}
+                  className={cx(BTN, "border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--surface-2)]")}
                 >
                   Sao chép mã
                 </button>
@@ -273,7 +273,7 @@ export default function SyncSection({ incomingCode, onConsumed }) {
                   onClick={async () =>
                     (await copy(link)) ? say("Đã sao chép link ✓") : say("Sao chép thất bại", true)
                   }
-                  className={cx(BTN, "border border-stone-300 bg-white text-stone-700 hover:bg-stone-100")}
+                  className={cx(BTN, "border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--surface-2)]")}
                 >
                   Sao chép link
                 </button>
@@ -283,19 +283,19 @@ export default function SyncSection({ incomingCode, onConsumed }) {
                   <img
                     src={qr}
                     alt="Mã QR đồng bộ"
-                    className="h-44 w-44 rounded-xl border border-stone-200 bg-white"
+                    className="h-44 w-44 rounded-xl border border-[var(--border)] bg-[var(--surface)]"
                   />
-                  <p className="text-[11px] text-stone-500">
+                  <p className="text-[11px] text-[var(--text-muted)]">
                     Thiết bị kia mở camera, quét để mở link đồng bộ
                   </p>
                 </div>
               ) : (
-                <p className="mt-3 text-[11px] text-amber-700">
+                <p className="mt-3 text-[11px] text-[var(--warning)]">
                   Mã quá dài để làm QR ({code.length} ký tự) — hãy dùng cách sao chép mã/link, hoặc
                   xuất file trong mục Cài đặt.
                 </p>
               )}
-              <p className="mt-2 text-[11px] text-stone-400">
+              <p className="mt-2 text-[11px] text-[var(--text-faint)]">
                 Mã có hiệu lực đến {fmtDate(Date.now())} · dài {code.length} ký tự
               </p>
             </>
@@ -303,14 +303,14 @@ export default function SyncSection({ incomingCode, onConsumed }) {
         </div>
 
         {/* Nhận */}
-        <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-          <h4 className="text-sm font-bold text-stone-900">2 · Nhận vào máy này</h4>
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+          <h4 className="text-sm font-bold text-[var(--text)]">2 · Nhận vào máy này</h4>
           <textarea
             value={recv}
             onChange={(e) => setRecv(e.target.value)}
             rows={3}
             placeholder="Dán mã đồng bộ hoặc link nhận được từ thiết bị khác…"
-            className="mt-3 w-full resize-none rounded-xl border border-stone-300 bg-white p-2.5 font-mono text-[10px] leading-relaxed text-stone-900 placeholder:font-sans placeholder:text-[12px] placeholder:text-stone-400 focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100"
+            className="mt-3 w-full resize-none rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5 font-mono text-[10px] leading-relaxed text-[var(--text)] placeholder:font-sans placeholder:text-[12px] placeholder:text-[var(--text-faint)] focus:border-[var(--brand)] focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/25"
           />
           <div className="mt-2 grid grid-cols-2 gap-2">
             <button
@@ -320,8 +320,8 @@ export default function SyncSection({ incomingCode, onConsumed }) {
               className={cx(
                 BTN,
                 recv.trim()
-                  ? "bg-stone-900 text-white hover:bg-stone-800"
-                  : "cursor-not-allowed bg-stone-200 text-stone-400"
+                  ? "bg-[var(--text)] text-[var(--bg)] hover:opacity-90"
+                  : "cursor-not-allowed bg-[var(--surface-2)] text-[var(--text-faint)]"
               )}
             >
               Gộp tiến trình
@@ -329,34 +329,34 @@ export default function SyncSection({ incomingCode, onConsumed }) {
             <button
               type="button"
               onClick={scanning ? stopScan : startScan}
-              className={cx(BTN, "border border-stone-300 bg-white text-stone-700 hover:bg-stone-100")}
+              className={cx(BTN, "border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--surface-2)]")}
             >
               {scanning ? "Tắt camera" : "📷 Quét QR"}
             </button>
           </div>
           {scanning && (
-            <div className="mt-3 overflow-hidden rounded-xl border border-stone-200 bg-black">
+            <div className="mt-3 overflow-hidden rounded-xl border border-[var(--border)] bg-black">
               <video ref={videoRef} className="aspect-video w-full object-cover" muted playsInline />
             </div>
           )}
-          <p className="mt-3 text-[11px] leading-relaxed text-stone-400">
+          <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-faint)]">
             Không có mã bên bạn? Nhờ máy kia tạo mã/link/QR rồi gửi sang. Sau khi gộp, hai máy sẽ
             giống nhau ở phần chung.
           </p>
         </div>
       </div>
 
-      <ul className="mt-4 space-y-1.5 rounded-2xl border border-stone-100 bg-stone-50 p-4 text-[11px] leading-relaxed text-stone-500">
+      <ul className="mt-4 space-y-1.5 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4 text-[11px] leading-relaxed text-[var(--text-muted)]">
         <li>
-          <b className="text-stone-700">Cách gộp:</b> từ đã thuộc = hợp hai máy · từ hay sai & lịch
+          <b className="text-[var(--text)]">Cách gộp:</b> từ đã thuộc = hợp hai máy · từ hay sai & lịch
           học = số lớn hơn · cài đặt = bản lưu gần nhất.
         </li>
         <li>
-          <b className="text-stone-700">Hạn chế:</b> đồng bộ thủ công (mỗi lần đổi máy phải bấm) —
+          <b className="text-[var(--text)]">Hạn chế:</b> đồng bộ thủ công (mỗi lần đổi máy phải bấm) —
           bỏ đánh dấu “đã thuộc” trên máy này vẫn quay lại nếu máy kia còn đánh dấu.
         </li>
         <li>
-          <b className="text-stone-700">Riêng tư:</b> phần sau dấu # của link không gửi lên máy chủ,
+          <b className="text-[var(--text)]">Riêng tư:</b> phần sau dấu # của link không gửi lên máy chủ,
           nên mã đồng bộ chỉ tồn tại ở hai thiết bị của bạn. Dữ liệu nhiều hơn (lịch sử từng câu)
           nên chuyển bằng file trong mục Cài đặt.
         </li>
@@ -366,7 +366,7 @@ export default function SyncSection({ incomingCode, onConsumed }) {
         <p
           className={cx(
             "mt-3 text-center text-xs font-medium",
-            msg.err ? "text-red-600" : "text-emerald-700"
+            msg.err ? "text-[var(--danger)]" : "text-[var(--success)]"
           )}
         >
           {msg.text}

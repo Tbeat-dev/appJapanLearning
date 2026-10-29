@@ -11,14 +11,14 @@ const cx = (...a) => a.filter(Boolean).join(" ");
 
 function ProfileCard({ p, onLearn, onEdit, compact }) {
   return (
-    <section className="fade-up overflow-hidden rounded-2xl border-2 border-stone-900 bg-stone-900 p-5 text-white shadow-md">
+    <section className="fade-up overflow-hidden rounded-2xl border-2 border-[var(--text)] bg-[var(--text)] p-5 text-[var(--bg)] shadow-md">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-400">Hồ sơ của bạn</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-faint)]">Hồ sơ của bạn</h2>
         {onEdit && (
           <button
             type="button"
             onClick={onEdit}
-            className="rounded-lg border border-white/20 px-3 py-1.5 text-xs font-semibold text-stone-200 transition hover:bg-white/10 active:scale-95"
+            className="rounded-lg border border-[var(--bg)]/20 px-3 py-1.5 text-xs font-semibold text-[var(--bg)] transition hover:bg-[var(--bg)]/10 active:scale-95"
           >
             ✏️ Chỉnh sửa
           </button>
@@ -27,7 +27,7 @@ function ProfileCard({ p, onLearn, onEdit, compact }) {
       <div className="mt-3 flex items-center gap-3">
         <span
           aria-hidden="true"
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-red-700 text-2xl shadow-sm"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[var(--brand-hover)] text-2xl shadow-sm"
         >
           {p.avatar || "🇯🇵"}
         </span>
@@ -35,10 +35,10 @@ function ProfileCard({ p, onLearn, onEdit, compact }) {
           <div className="truncate text-lg font-bold">{p.name ? `Chào, ${p.name}!` : "Chưa có tên"}</div>
           <div className="mt-0.5 flex flex-wrap gap-1.5 text-xs">
             {p.goal && (
-              <span className="rounded-full bg-red-600 px-2 py-0.5 font-semibold">{goalLabel(p.goal)}</span>
+              <span className="rounded-full bg-[var(--brand)] px-2 py-0.5 font-semibold">{goalLabel(p.goal)}</span>
             )}
-            {p.level && <span className="rounded-full bg-white/10 px-2 py-0.5">{levelLabel(p.level)}</span>}
-            {p.daily && <span className="rounded-full bg-white/10 px-2 py-0.5">{p.daily} phút/ngày</span>}
+            {p.level && <span className="rounded-full bg-[var(--bg)]/10 px-2 py-0.5">{levelLabel(p.level)}</span>}
+            {p.daily && <span className="rounded-full bg-[var(--bg)]/10 px-2 py-0.5">{p.daily} phút/ngày</span>}
           </div>
         </div>
       </div>
@@ -46,7 +46,7 @@ function ProfileCard({ p, onLearn, onEdit, compact }) {
         <button
           type="button"
           onClick={onLearn}
-          className="mt-4 w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition duration-150 hover:bg-red-700 active:scale-[0.99]"
+          className="mt-4 w-full rounded-xl bg-[var(--brand)] px-4 py-3 text-sm font-semibold text-[var(--on-brand)] transition duration-150 hover:bg-[var(--brand-hover)] active:scale-[0.99]"
         >
           Bắt đầu học theo mục tiêu →
         </button>
@@ -76,15 +76,15 @@ export default function Profile({ onLearn, syncCode, onSyncConsumed }) {
   if (viewMode) {
     return (
       <div style={JP}>
-        <header className="border-b border-stone-200 bg-white">
+        <header className="border-b border-[var(--border)] bg-[var(--surface)]">
           <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-10 lg:max-w-4xl">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-red-100 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--brand)]/25 bg-[var(--brand-soft)] px-3 py-1 text-xs font-semibold text-[var(--brand)]">
               Hồ sơ
             </span>
-            <h1 className="mt-3 text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
+            <h1 className="mt-3 text-2xl font-bold tracking-tight text-[var(--text)] sm:text-3xl">
               Xin chào, {p.name} 👋
             </h1>
-            <p className="mt-1.5 text-sm leading-snug text-stone-600">
+            <p className="mt-1.5 text-sm leading-snug text-[var(--text-muted)]">
               Theo dõi tiến độ và huy hiệu của bạn — mọi dữ liệu lưu ngay trên máy.
             </p>
           </div>
@@ -94,15 +94,15 @@ export default function Profile({ onLearn, syncCode, onSyncConsumed }) {
           <ProfileCard p={p} onLearn={onLearn} onEdit={() => setEditing(true)} />
 
           {syncCode && (
-            <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <p className="rounded-2xl border border-[var(--warning)]/40 bg-[var(--warning-soft)] px-4 py-3 text-sm text-[var(--warning)]">
               🔗 Nhận mã đồng bộ từ thiết bị khác — cuộn xuống mục “Đồng bộ &amp; sao lưu” để gộp.
             </p>
           )}
 
           <section className="fade-up delay-1">
             <div className="mb-3 flex items-center gap-2">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-500">Tiến độ học tập</h2>
-              <div className="h-px flex-1 bg-stone-200" />
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">Tiến độ học tập</h2>
+              <div className="h-px flex-1 bg-[var(--surface-2)]" />
             </div>
             <Progress />
           </section>
@@ -115,24 +115,24 @@ export default function Profile({ onLearn, syncCode, onSyncConsumed }) {
 
   return (
     <div style={JP}>
-      <header className="border-b border-stone-200 bg-white">
+      <header className="border-b border-[var(--border)] bg-[var(--surface)]">
         <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-10 lg:max-w-4xl">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-red-100 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--brand)]/25 bg-[var(--brand-soft)] px-3 py-1 text-xs font-semibold text-[var(--brand)]">
               Cá nhân hóa
             </span>
             {done && (
               <button
                 type="button"
                 onClick={() => setEditing(false)}
-                className="rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-50 active:scale-95"
+                className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3.5 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--surface-2)] active:scale-95"
               >
                 ← Xem hồ sơ
               </button>
             )}
           </div>
-          <h1 className="mt-3 text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">Chỉnh sửa hồ sơ</h1>
-          <p className="mt-1.5 text-sm leading-snug text-stone-600">
+          <h1 className="mt-3 text-2xl font-bold tracking-tight text-[var(--text)] sm:text-3xl">Chỉnh sửa hồ sơ</h1>
+          <p className="mt-1.5 text-sm leading-snug text-[var(--text-muted)]">
             Chọn mục tiêu và phong cách học — app ghi nhớ ngay trên máy bạn, không cần đăng nhập.
           </p>
         </div>

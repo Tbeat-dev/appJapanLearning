@@ -171,13 +171,13 @@ function packProgress(p, opts = {}) {
     w.v(s.total || 0);
   }
 
-  w.str(JSON.stringify({ settings: p.settings || {}, profile: opts.profile || null }));
+  w.str(JSON.stringify({ settings: p.settings || {}, profile: opts.profile || null, write: p.write || {} }));
   return w.out();
 }
 
 function unpackProgress(u8) {
   const r = new R(u8);
-  if (r.u8() !== MAGIC0 || r.u8() !== MAGIC1) throw new Error("Không phải mã đồng bộ KanaLearn");
+  if (r.u8() !== MAGIC0 || r.u8() !== MAGIC1) throw new Error("Không phải mã đồng bộ HirataLearn");
   const ver = r.u8();
   if (ver !== VERSION) throw new Error("Mã đồng bộ được tạo bởi phiên bản app khác");
 
@@ -232,7 +232,16 @@ function unpackProgress(u8) {
 
   const tail = JSON.parse(r.str() || "{}");
   return {
-    progress: { known, wrong, days, timeSec, stats, settings: tail.settings || {}, updatedAt },
+    progress: {
+      known,
+      wrong,
+      days,
+      timeSec,
+      stats,
+      settings: tail.settings || {},
+      write: tail.write || {},
+      updatedAt,
+    },
     profile: tail.profile || null,
   };
 }
@@ -277,6 +286,7 @@ function mergeProgress(a, b) {
       wrong,
       days: maxMap(a.days, b.days),
       timeSec: maxMap(a.timeSec, b.timeSec),
+      write: maxMap(a.write, b.write),
       stats,
       settings,
       updatedAt: Math.max(a.updatedAt || 0, b.updatedAt || 0),
@@ -316,11 +326,8 @@ function extractSyncCode(text) {
 export {
   encodeSync,
   decodeSync,
-  packProgress,
-  unpackProgress,
   mergeProgress,
   syncSummary,
-  countKnown,
   buildSyncUrl,
   extractSyncCode,
   MAX_CODE,

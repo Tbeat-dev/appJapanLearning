@@ -68,11 +68,11 @@ const SEC_LABEL = { kana: "Chữ cái", kanji: "Hán tự", num: "Số đếm", 
 
 // ---- heatmap 12 tuần ----
 function heatColor(n) {
-  if (n === 0) return "bg-stone-100";
-  if (n <= 2) return "bg-red-200";
-  if (n <= 5) return "bg-red-400";
-  if (n <= 10) return "bg-red-500";
-  return "bg-red-700";
+  if (n === 0) return "bg-[var(--surface-2)]";
+  if (n <= 2) return "bg-[var(--brand)]/25";
+  if (n <= 5) return "bg-[var(--brand)]/45";
+  if (n <= 10) return "bg-[var(--brand)]";
+  return "bg-[var(--brand-hover)]";
 }
 
 function Heatmap({ days }) {
@@ -103,14 +103,14 @@ function Heatmap({ days }) {
                 title={`${cell.key}: ${cell.n} lượt`}
                 className={cx(
                   "h-3 w-3 rounded-[3px]",
-                  cell.future ? "bg-stone-50" : heatColor(cell.n)
+                  cell.future ? "bg-[var(--surface-2)]" : heatColor(cell.n)
                 )}
               />
             ))}
           </div>
         ))}
       </div>
-      <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-stone-500">
+      <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-[var(--text-muted)]">
         <span className="mr-1">Ít</span>
         {[0, 2, 5, 10].map((n) => (
           <span key={n} className={cx("h-2.5 w-2.5 rounded-[3px]", heatColor(n))} />
@@ -130,12 +130,12 @@ function Review({ entries, onDone }) {
 
   if (!wk) {
     return (
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center text-sm font-medium text-emerald-800">
+      <div className="rounded-xl border border-[var(--success)]/30 bg-[var(--success-soft)] p-4 text-center text-sm font-medium text-[var(--success)]">
         Ôn tập xong! 🎉
         <button
           type="button"
           onClick={onDone}
-          className="mt-2 block w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+          className="mt-2 block w-full rounded-lg border border-[var(--success)]/45 bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--success)] transition hover:bg-[var(--success-soft)]"
         >
           Quay lại
         </button>
@@ -159,11 +159,11 @@ function Review({ entries, onDone }) {
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between text-xs text-stone-500">
+      <div className="mb-2 flex items-center justify-between text-xs text-[var(--text-muted)]">
         <span>
-          Câu <b className="text-stone-800">{i + 1}</b>/{queue.length}
+          Câu <b className="text-[var(--text)]">{i + 1}</b>/{queue.length}
         </span>
-        <button type="button" onClick={onDone} className="underline transition hover:text-red-700">
+        <button type="button" onClick={onDone} className="underline transition hover:text-[var(--brand)]">
           Kết thúc
         </button>
       </div>
@@ -179,23 +179,23 @@ function Review({ entries, onDone }) {
         }}
         className={cx(
           "flex min-h-[8rem] cursor-pointer select-none flex-col items-center justify-center rounded-2xl border-2 px-4 py-6 text-center transition duration-150",
-          show ? "border-emerald-400 bg-emerald-50/60" : "border-stone-200 bg-white hover:border-stone-300"
+          show ? "border-[var(--success)] bg-[var(--success-soft)]/60" : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border)]"
         )}
       >
-        <div className="break-words text-4xl font-bold leading-tight text-stone-900 sm:text-5xl" style={JP}>
+        <div className="break-words text-4xl font-bold leading-tight text-[var(--text)] sm:text-5xl" style={JP}>
           {d.jp}
         </div>
         {show ? (
           <div className="mt-3 space-y-1">
             {d.sub && (
-              <div className="break-words text-base font-medium text-red-700 sm:text-lg" style={JP}>
+              <div className="break-words text-base font-medium text-[var(--brand)] sm:text-lg" style={JP}>
                 {d.sub}
               </div>
             )}
-            {d.vi && <div className="break-words text-sm text-stone-700 sm:text-base">{d.vi}</div>}
+            {d.vi && <div className="break-words text-sm text-[var(--text)] sm:text-base">{d.vi}</div>}
           </div>
         ) : (
-          <div className="mt-2 text-xs text-stone-400">Chạm để xem đáp án</div>
+          <div className="mt-2 text-xs text-[var(--text-faint)]">Chạm để xem đáp án</div>
         )}
       </div>
       {show && (
@@ -203,14 +203,14 @@ function Review({ entries, onDone }) {
           <button
             type="button"
             onClick={forget}
-            className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-100 active:scale-[0.98]"
+            className="rounded-xl border border-[var(--brand)]/45 bg-[var(--brand-soft)] px-4 py-3 text-sm font-semibold text-[var(--brand)] transition hover:bg-[var(--brand-soft)] active:scale-[0.98]"
           >
             Chưa nhớ
           </button>
           <button
             type="button"
             onClick={remember}
-            className="rounded-xl border border-emerald-500 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 active:scale-[0.98]"
+            className="rounded-xl border border-[var(--success)] bg-[var(--success)] px-4 py-3 text-sm font-semibold text-[var(--bg)] transition hover:bg-[var(--success)]/85 active:scale-[0.98]"
           >
             Đã nhớ ✓
           </button>
@@ -229,17 +229,17 @@ function shuffleArr(a) {
   return r;
 }
 
-function Bar({ label, value, total, color = "bg-red-500" }) {
+function Bar({ label, value, total, color = "bg-[var(--brand)]" }) {
   const pct = total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
   return (
     <div>
       <div className="flex items-baseline justify-between text-xs">
-        <span className="font-medium text-stone-700">{label}</span>
-        <span className="tabular-nums text-stone-500">
+        <span className="font-medium text-[var(--text)]">{label}</span>
+        <span className="tabular-nums text-[var(--text-muted)]">
           {value}/{total} · {pct}%
         </span>
       </div>
-      <div className="mt-1 h-2 overflow-hidden rounded-full bg-stone-100">
+      <div className="mt-1 h-2 overflow-hidden rounded-full bg-[var(--surface-2)]">
         <div className={cx("h-full rounded-full transition-all duration-500", color)} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -257,12 +257,12 @@ function Switch({ on, onChange, label }) {
       onClick={onChange}
       className={cx(
         "relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200",
-        on ? "bg-red-600" : "bg-stone-300"
+        on ? "bg-[var(--brand)]" : "bg-[var(--border)]"
       )}
     >
       <span
         className={cx(
-          "absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+          "absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-[var(--surface)] shadow-sm transition-transform duration-200",
           on && "translate-x-5"
         )}
       />
@@ -277,7 +277,7 @@ function Chev({ up }) {
       aria-hidden="true"
       viewBox="0 0 20 20"
       fill="currentColor"
-      className={cx("h-4 w-4 shrink-0 text-stone-400 transition-transform duration-200", up && "rotate-90")}
+      className={cx("h-4 w-4 shrink-0 text-[var(--text-faint)] transition-transform duration-200", up && "rotate-90")}
     >
       <path
         fillRule="evenodd"
@@ -294,18 +294,18 @@ function Row({ icon, label, desc, onClick, right, danger }) {
     <>
       {icon && <span aria-hidden="true" className="w-5 shrink-0 text-center text-base leading-none">{icon}</span>}
       <span className="min-w-0 flex-1">
-        <span className={cx("block truncate text-sm font-medium", danger ? "text-red-600" : "text-stone-800")}>
+        <span className={cx("block truncate text-sm font-medium", danger ? "text-[var(--danger)]" : "text-[var(--text)]")}>
           {label}
         </span>
-        {desc && <span className="mt-0.5 block truncate text-xs text-stone-400">{desc}</span>}
+        {desc && <span className="mt-0.5 block truncate text-xs text-[var(--text-faint)]">{desc}</span>}
       </span>
       {right}
     </>
   );
   const cls =
-    "flex w-full items-center gap-3 border-t border-stone-100 px-4 py-3.5 text-left transition first:border-t-0";
+    "flex w-full items-center gap-3 border-t border-[var(--border)] px-4 py-3.5 text-left transition first:border-t-0";
   return onClick ? (
-    <button type="button" onClick={onClick} className={cx(cls, "hover:bg-stone-50 active:bg-stone-100")}>
+    <button type="button" onClick={onClick} className={cx(cls, "hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)]")}>
       {inner}
     </button>
   ) : (
@@ -342,7 +342,7 @@ export default function Progress() {
       const blob = new Blob([JSON.stringify(p, null, 2)], { type: "application/json" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = "kanalearn-progress.json";
+      a.download = "hiratalearn-progress.json";
       a.click();
       URL.revokeObjectURL(a.href);
       setMsg("Đã xuất file tiến độ ✓");
@@ -377,29 +377,29 @@ export default function Progress() {
   return (
     <div style={JP} className="space-y-5">
       {/* Streak + mục tiêu hôm nay */}
-      <section className="fade-up rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+      <section className="fade-up rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl bg-red-50">
+          <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl bg-[var(--brand-soft)]">
             <span className="text-xl leading-none">🔥</span>
-            <span className="mt-0.5 text-lg font-bold leading-none text-red-700 tabular-nums">{streak}</span>
+            <span className="mt-0.5 text-lg font-bold leading-none text-[var(--brand)] tabular-nums">{streak}</span>
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-sm font-semibold text-stone-900">Hôm nay</span>
-              <span className="text-xs tabular-nums text-stone-500">
+              <span className="text-sm font-semibold text-[var(--text)]">Hôm nay</span>
+              <span className="text-xs tabular-nums text-[var(--text-muted)]">
                 {todayN}/{goal} lượt
               </span>
             </div>
-            <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-stone-100">
+            <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-[var(--surface-2)]">
               <div
                 className={cx(
                   "h-full rounded-full transition-all duration-500",
-                  goalPct >= 100 ? "bg-emerald-500" : "bg-red-500"
+                  goalPct >= 100 ? "bg-[var(--success)]" : "bg-[var(--brand)]"
                 )}
                 style={{ width: `${goalPct}%` }}
               />
             </div>
-            <p className="mt-1.5 text-xs text-stone-500">
+            <p className="mt-1.5 text-xs text-[var(--text-muted)]">
               {goalPct >= 100 ? "Hoàn thành mục tiêu hôm nay! 🎉" : `Còn ${Math.max(0, goal - todayN)} lượt để đạt mục tiêu`}
               {studyMin > 0 && <span className="ml-1">· ⏱ Đã học {studyMin} phút hôm nay</span>}
             </p>
@@ -408,26 +408,26 @@ export default function Progress() {
       </section>
 
       {/* Thống kê */}
-      <section className="fade-up delay-1 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-500">Kết quả luyện tập</h3>
+      <section className="fade-up delay-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">Kết quả luyện tập</h3>
         {totalAll === 0 ? (
-          <p className="mt-3 text-sm text-stone-500">
+          <p className="mt-3 text-sm text-[var(--text-muted)]">
             Chưa có dữ liệu — hãy làm vài câu trắc nghiệm để bắt đầu theo dõi tiến độ.
           </p>
         ) : (
           <>
             <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-xl bg-stone-50 py-3">
-                <div className="text-xl font-bold tabular-nums text-stone-900">{totalAll}</div>
-                <div className="text-[11px] text-stone-500">câu đã làm</div>
+              <div className="rounded-xl bg-[var(--surface-2)] py-3">
+                <div className="text-xl font-bold tabular-nums text-[var(--text)]">{totalAll}</div>
+                <div className="text-[11px] text-[var(--text-muted)]">câu đã làm</div>
               </div>
-              <div className="rounded-xl bg-stone-50 py-3">
-                <div className="text-xl font-bold tabular-nums text-emerald-600">{acc}%</div>
-                <div className="text-[11px] text-stone-500">độ chính xác</div>
+              <div className="rounded-xl bg-[var(--surface-2)] py-3">
+                <div className="text-xl font-bold tabular-nums text-[var(--success)]">{acc}%</div>
+                <div className="text-[11px] text-[var(--text-muted)]">độ chính xác</div>
               </div>
-              <div className="rounded-xl bg-stone-50 py-3">
-                <div className="text-xl font-bold tabular-nums text-stone-900">{knownV + knownK}</div>
-                <div className="text-[11px] text-stone-500">mục đã thuộc</div>
+              <div className="rounded-xl bg-[var(--surface-2)] py-3">
+                <div className="text-xl font-bold tabular-nums text-[var(--text)]">{knownV + knownK}</div>
+                <div className="text-[11px] text-[var(--text-muted)]">mục đã thuộc</div>
               </div>
             </div>
             <div className="mt-4 space-y-3">
@@ -437,21 +437,21 @@ export default function Progress() {
                   label={SEC_LABEL[sec] || sec}
                   value={s.ok}
                   total={s.total}
-                  color={s.ok / s.total >= 0.85 ? "bg-emerald-500" : "bg-red-500"}
+                  color={s.ok / s.total >= 0.85 ? "bg-[var(--success)]" : "bg-[var(--brand)]"}
                 />
               ))}
             </div>
           </>
         )}
-        <div className="mt-4 space-y-3 border-t border-stone-100 pt-4">
-          <Bar label="Từ vựng đã thuộc" value={knownV} total={vocabList.length} color="bg-amber-500" />
-          <Bar label="Hán tự đã thuộc" value={knownK} total={kanjiList.length} color="bg-blue-500" />
+        <div className="mt-4 space-y-3 border-t border-[var(--border)] pt-4">
+          <Bar label="Từ vựng đã thuộc" value={knownV} total={vocabList.length} color="bg-[var(--warning)]" />
+          <Bar label="Hán tự đã thuộc" value={knownK} total={kanjiList.length} color="bg-[var(--info)]" />
         </div>
       </section>
 
       {/* Heatmap */}
-      <section className="fade-up delay-2 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-500">Hoạt động 12 tuần</h3>
+      <section className="fade-up delay-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">Hoạt động 12 tuần</h3>
         <div className="mt-3">
           <Heatmap days={p.days} />
         </div>
@@ -462,16 +462,16 @@ export default function Progress() {
 
       {/* Từ hay sai */}
       {wrongEntries.length > 0 && (
-        <section className="fade-up delay-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+        <section className="fade-up delay-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-500">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">
               Từ hay sai ({wrongEntries.length})
             </h3>
             {!reviewing && (
               <button
                 type="button"
                 onClick={() => setReviewing(true)}
-                className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-800 active:scale-95"
+                className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-[var(--on-brand)] transition hover:bg-[var(--brand-hover)] active:scale-95"
               >
                 Ôn tập ngay
               </button>
@@ -488,23 +488,23 @@ export default function Progress() {
                   return (
                     <li
                       key={wk}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-stone-100 bg-stone-50 px-3.5 py-2.5"
+                      className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3.5 py-2.5"
                     >
                       <div className="min-w-0">
-                        <span className="break-words text-base font-semibold text-stone-900" style={JP}>
+                        <span className="break-words text-base font-semibold text-[var(--text)]" style={JP}>
                           {d.jp}
                         </span>
                         {d.sub && (
-                          <span className="ml-2 break-words text-sm text-red-700" style={JP}>
+                          <span className="ml-2 break-words text-sm text-[var(--brand)]" style={JP}>
                             {d.sub}
                           </span>
                         )}
-                        {d.vi && <span className="ml-2 text-xs text-stone-500">— {d.vi}</span>}
+                        {d.vi && <span className="ml-2 text-xs text-[var(--text-muted)]">— {d.vi}</span>}
                       </div>
-                      <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-red-700">
+                      <span className="shrink-0 rounded-full bg-[var(--brand-soft)] px-2 py-0.5 text-[11px] font-semibold tabular-nums text-[var(--brand)]">
                         sai ×{n}
                       </span>
-                      <span className="hidden shrink-0 text-[10px] text-stone-400 sm:block">
+                      <span className="hidden shrink-0 text-[10px] text-[var(--text-faint)] sm:block">
                         {SEC_LABEL[sec] || sec}
                       </span>
                     </li>
@@ -519,13 +519,13 @@ export default function Progress() {
       {/* Cài đặt */}
       <section className="fade-up delay-4">
         <div className="mb-3 flex items-center gap-2">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-500">Cài đặt</h3>
-          <div className="h-px flex-1 bg-stone-200" />
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">Cài đặt</h3>
+          <div className="h-px flex-1 bg-[var(--surface-2)]" />
         </div>
 
         {/* Học tập */}
-        <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
-          <div className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+        <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+          <div className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-faint)]">
             Học tập
           </div>
           <Row
@@ -533,14 +533,14 @@ export default function Progress() {
             label="Mục tiêu mỗi ngày"
             onClick={() => setGoalOpen((v) => !v)}
             right={
-              <span className="flex shrink-0 items-center gap-1.5 text-sm font-semibold text-stone-500">
+              <span className="flex shrink-0 items-center gap-1.5 text-sm font-semibold text-[var(--text-muted)]">
                 {goal} lượt
                 <Chev up={goalOpen} />
               </span>
             }
           />
           {goalOpen && (
-            <div className="grid grid-cols-4 gap-2 border-t border-stone-100 bg-stone-50/70 px-4 py-3">
+            <div className="grid grid-cols-4 gap-2 border-t border-[var(--border)] bg-[var(--surface-2)]/70 px-4 py-3">
               {[5, 10, 20, 50].map((g) => (
                 <button
                   key={g}
@@ -552,8 +552,8 @@ export default function Progress() {
                   className={cx(
                     "rounded-lg border py-2 text-sm font-semibold transition duration-150 active:scale-95",
                     goal === g
-                      ? "border-red-600 bg-red-600 text-white shadow-sm"
-                      : "border-stone-200 bg-white text-stone-600 hover:border-red-300 hover:text-red-700"
+                      ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--on-brand)] shadow-sm"
+                      : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--brand)]/45 hover:text-[var(--brand)]"
                   )}
                 >
                   {g}
@@ -564,8 +564,8 @@ export default function Progress() {
         </div>
 
         {/* Thông báo */}
-        <div className="mt-3 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
-          <div className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+        <div className="mt-3 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+          <div className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-faint)]">
             Thông báo
           </div>
           <Row
@@ -595,8 +595,8 @@ export default function Progress() {
         </div>
 
         {/* Dữ liệu */}
-        <div className="mt-3 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
-          <div className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+        <div className="mt-3 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+          <div className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-faint)]">
             Dữ liệu
           </div>
           <Row icon="⬇️" label="Xuất tiến độ" desc="Tải file JSON về máy" onClick={onExport} right={<Chev />} />
@@ -611,7 +611,7 @@ export default function Progress() {
           <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={onImportFile} />
         </div>
 
-        {msg && <p className="mt-3 text-center text-xs text-emerald-700">{msg}</p>}
+        {msg && <p className="mt-3 text-center text-xs text-[var(--success)]">{msg}</p>}
       </section>
     </div>
   );
