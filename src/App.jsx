@@ -25,7 +25,7 @@ import { markTtsUnavailableClass } from "./lib/tts.js";
  *   #/review            Ôn tập
  *   #/test              Luyện đề
  *   #/library           Thư viện (chọn mục)
- *   #/library/:sub      kana | kanji | num | vocab
+ *   #/library/:sub      kana | kanji | num | vocab | grammar
  *   #/settings          Cài đặt
  *   #/profile           Hồ sơ / thành tựu / sync
  */

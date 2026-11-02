@@ -73,12 +73,22 @@ export default function Quiz({ questions, title, onDone, onExit, onAnswer }) {
         )}
       </div>
 
-      {title && <p className="mb-2 text-[var(--fs-tiny)] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{title}</p>}
+      {title && <p className="eyebrow eyebrow-quiet mb-2">{title}</p>}
 
       <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-1)]">
         <p className="text-sm font-medium text-[var(--text-muted)]">{q.prompt}</p>
         {q.sub && (
-          <p lang="ja" className="ja-display mt-3 text-center text-[var(--fs-display)] font-bold text-[var(--text)]">
+          <p
+            lang="ja"
+            className={cx(
+              "ja-display mt-3 text-center font-bold text-[var(--text)]",
+              q.sub.length <= 3
+                ? "text-[var(--fs-display)]"
+                : q.sub.length <= 8
+                  ? "text-[var(--fs-h1)]"
+                  : "text-[var(--fs-h2)] leading-snug"
+            )}
+          >
             {q.sub}
           </p>
         )}

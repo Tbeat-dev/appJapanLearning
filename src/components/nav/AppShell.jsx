@@ -116,7 +116,7 @@ export default function AppShell({ page, children }) {
             </span>
             <span className="min-w-0 leading-tight">
               <span className="block truncate text-sm font-bold text-[var(--text)]">HirataLearn</span>
-              <span className="block truncate text-[11px] text-[var(--text-muted)]">Tiếng Nhật N5</span>
+              <span className="block truncate text-[var(--fs-label)] text-[var(--text-muted)]">Tiếng Nhật N5</span>
             </span>
           </a>
 
@@ -178,7 +178,7 @@ export default function AppShell({ page, children }) {
                   href={href}
                   aria-current={on ? "page" : undefined}
                   className={cx(
-                    "flex h-full flex-col items-center justify-center gap-0.5 px-1 text-[11px] font-semibold transition duration-150",
+                    "flex h-full flex-col items-center justify-center gap-0.5 px-1 text-[var(--fs-label)] font-semibold transition duration-150",
                     on ? "text-[var(--brand)]" : "text-[var(--text-muted)]"
                   )}
                 >

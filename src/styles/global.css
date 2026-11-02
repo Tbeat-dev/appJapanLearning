@@ -13,9 +13,110 @@ body {
   color: var(--text);
   font-family: var(--font-ui);
   font-size: var(--fs-body);
-  line-height: 1.5;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* ===== Typography ===== */
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: var(--ls-heading);
+    text-wrap: balance;
+  }
+
+  h1 {
+    letter-spacing: var(--ls-display);
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background-color: var(--brand);
+    color: var(--on-brand);
+  }
+}
+
+@layer components {
+  /* Nhãn nhỏ chữ hoa — eyebrow/section label thống nhất toàn app.
+     Mặc định đỏ mộc (--brand) như con dấu: chỉ dùng cho nhãn cấp trang.
+     Nhãn trong card dùng .eyebrow-quiet (xám). */
+  .eyebrow {
+    font-size: var(--fs-label);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: var(--ls-wide);
+    line-height: 1.4;
+    color: var(--brand);
+  }
+
+  .eyebrow-quiet {
+    color: var(--text-muted);
+  }
+
+  /* Gradient RGB chảy (đỏ → xanh lá → xanh dương) — chỉ gắn kèm .eyebrow
+     ở label cấp trang. Dùng token màu sẵn (--brand/--success/--info) thay
+     neon RGB thuần để chữ luôn đạt tương phản trên nền sáng/tối. */
+  .eyebrow-rgb {
+    background-image: linear-gradient(
+      90deg,
+      var(--brand),
+      var(--success),
+      var(--info),
+      var(--brand)
+    );
+    background-size: 300% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation:
+      eyebrow-rgb-flow 3.5s linear infinite,
+      eyebrow-rgb-hue 6s linear infinite;
+  }
+
+  /* Số lớn: điểm, thành tích — weight 800, tracking siết, thẳng cột */
+  .display {
+    font-size: var(--fs-display);
+    font-weight: 800;
+    letter-spacing: var(--ls-display);
+    line-height: 1.05;
+    text-wrap: balance;
+  }
+
+  /* Số thẳng cột cho progress, tỉ lệ, ngày */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Gradient RGB chảy cho .eyebrow-rgb (ngoài layer để không bị che) */
+@keyframes eyebrow-rgb-flow {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 300% 50%;
+  }
+}
+
+/* Xoay sắc độ: hue-rotate áp lên hình chữ đã clip nền — màu RGB tự đổi tuần hoàn */
+@keyframes eyebrow-rgb-hue {
+  from {
+    filter: none;
+  }
+  to {
+    filter: hue-rotate(360deg);
+  }
 }
 
 button,
@@ -44,7 +145,10 @@ button {
 
 .ja-display {
   font-family: var(--font-ja-display);
-  line-height: 1.7;
+  font-weight: 700;
+  line-height: 1.45;
+  letter-spacing: var(--ls-ja);
+  font-feature-settings: "palt" 1;
 }
 
 .ruby-wrap ruby {
@@ -58,10 +162,12 @@ button {
   font-weight: 400;
 }
 
-/* 3.3 — romaji nhỏ/nhạt hơn kana */
+/* 3.3 — romaji nhỏ/nhạt hơn kana, nhẹ nhịp hơn nhờ tracking */
 .romaji {
   font-size: var(--fs-small);
-  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
 }
 
 /* 12 — ẩn nút nghe khi trình duyệt không hỗ trợ TTS (JS sẽ gắn class này) */
@@ -92,5 +198,11 @@ button {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Label RGB vẫn chạy: chỉ đổi màu sắc, không chuyển động không gian */
+  .eyebrow-rgb {
+    animation-duration: 3.5s, 6s !important;
+    animation-iteration-count: infinite, infinite !important;
   }
 }

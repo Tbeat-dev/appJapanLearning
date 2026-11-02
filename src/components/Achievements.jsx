@@ -130,7 +130,7 @@ export function AchievementsPanel() {
   return (
     <section className="fade-up delay-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
       <div className="flex items-center gap-3">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[var(--warning)] bg-[var(--warning-soft)] text-2xl font-bold text-[var(--warning)]">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[var(--warning)] bg-[var(--warning-soft)] text-2xl font-bold text-[var(--warning)] tabular">
           {lv.level}
         </div>
         <div className="flex-1">
@@ -140,14 +140,14 @@ export function AchievementsPanel() {
           <div className="my-1 h-2.5 overflow-hidden rounded-full bg-[var(--surface-2)]">
             <div className="h-full bg-[var(--warning)]" style={{ width: `${lv.pct}%` }} />
           </div>
-          <div className="text-xs text-[var(--text-muted)]">
+          <div className="tabular text-xs text-[var(--text-muted)]">
             {pts} điểm · còn {lv.to - pts} điểm để lên cấp {lv.level + 1}
           </div>
         </div>
       </div>
 
       <div className="mt-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+        <h3 className="eyebrow eyebrow-quiet">
           Thành tựu ({done.length}/{ACH.length})
         </h3>
         <div className="flex gap-1 text-xs">

@@ -3,7 +3,7 @@ import { newlyUnlocked } from "./achievementData.js";
 
 const LS_KEY = "kanalearn.progress.v1";
 const DEFAULT_P = {
-  known: { kanji: {}, vocab: {} },
+  known: { kanji: {}, vocab: {}, grammar: {} },
   wrong: {},
   days: {},
   stats: {},
@@ -203,7 +203,7 @@ function applyProgress(next) {
 function resetP() {
   setP(() => ({
     ...DEFAULT_P,
-    known: { kanji: {}, vocab: {} },
+    known: { kanji: {}, vocab: {}, grammar: {} },
     wrong: {},
     days: {},
     stats: {},

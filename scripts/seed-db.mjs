@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { GROUPS, RAW, D, KD, PRE, HV, COUNTERS, DAYS, MIN, VRAW, TOPICS } from "../data/source.mjs";
+import { GROUPS, RAW, D, KD, PRE, HV, COUNTERS, DAYS, MIN, VRAW, TOPICS, GRAMMAR } from "../data/source.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dbDir = join(root, "data");
@@ -76,8 +76,20 @@ CREATE TABLE topics (
   keywords TEXT NOT NULL -- space-separated keys, same as source
 );
 
+CREATE TABLE grammar (
+  id INTEGER PRIMARY KEY,
+  category TEXT NOT NULL,
+  pattern TEXT NOT NULL,
+  name TEXT NOT NULL,
+  meaning TEXT NOT NULL,
+  example TEXT NOT NULL,
+  example_vi TEXT NOT NULL,
+  note TEXT
+);
+
 CREATE INDEX idx_kanji_radical ON kanji (is_radical);
 CREATE INDEX idx_vocab_category ON vocab (category);
+CREATE INDEX idx_grammar_category ON grammar (category);
 `);
 
 db.prepare("INSERT INTO schema_meta (key, value) VALUES ('version', '1'), ('source', 'data/source.mjs')").run();
@@ -120,8 +132,13 @@ for (const [cat, block] of Object.entries(VRAW)) {
 const insTopic = db.prepare("INSERT INTO topics (id, name, keywords) VALUES (?, ?, ?)");
 Object.entries(TOPICS).forEach(([name, keywords], id) => insTopic.run(id, name, keywords));
 
+const insGrammar = db.prepare(
+  "INSERT INTO grammar (id, category, pattern, name, meaning, example, example_vi, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+);
+GRAMMAR.forEach((g, id) => insGrammar.run(id, g.cat, g.pat, g.name, g.mean, g.ex, g.vi, g.note || null));
+
 const counts = {};
-for (const t of ["kana_groups", "kanji", "digits", "number_exceptions", "counters", "vocab", "topics"]) {
+for (const t of ["kana_groups", "kanji", "digits", "number_exceptions", "counters", "vocab", "topics", "grammar"]) {
   counts[t] = db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n;
 }
 db.close();

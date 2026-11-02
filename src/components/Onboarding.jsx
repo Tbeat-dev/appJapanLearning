@@ -90,7 +90,7 @@ export default function Onboarding({ onDone }) {
             </span>
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-[var(--fs-tiny)] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            <p className="eyebrow eyebrow-rgb">
               HirataLearn
             </p>
             <p className="text-xs text-[var(--text-faint)]">

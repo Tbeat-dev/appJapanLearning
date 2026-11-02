@@ -187,7 +187,7 @@ export default function SyncSection({ incomingCode, onConsumed }) {
 
   return (
     <section className="fade-up delay-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-      <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+      <h3 className="eyebrow eyebrow-quiet">
         Đồng bộ & sao lưu
       </h3>
       <p className="mt-2 text-xs leading-relaxed text-[var(--text-muted)]">
@@ -285,17 +285,17 @@ export default function SyncSection({ incomingCode, onConsumed }) {
                     alt="Mã QR đồng bộ"
                     className="h-44 w-44 rounded-xl border border-[var(--border)] bg-[var(--surface)]"
                   />
-                  <p className="text-[11px] text-[var(--text-muted)]">
+                  <p className="text-[var(--fs-label)] text-[var(--text-muted)]">
                     Thiết bị kia mở camera, quét để mở link đồng bộ
                   </p>
                 </div>
               ) : (
-                <p className="mt-3 text-[11px] text-[var(--warning)]">
+                <p className="mt-3 text-[var(--fs-label)] text-[var(--warning)]">
                   Mã quá dài để làm QR ({code.length} ký tự) — hãy dùng cách sao chép mã/link, hoặc
                   xuất file trong mục Cài đặt.
                 </p>
               )}
-              <p className="mt-2 text-[11px] text-[var(--text-faint)]">
+              <p className="mt-2 text-[var(--fs-label)] text-[var(--text-faint)]">
                 Mã có hiệu lực đến {fmtDate(Date.now())} · dài {code.length} ký tự
               </p>
             </>
@@ -339,14 +339,14 @@ export default function SyncSection({ incomingCode, onConsumed }) {
               <video ref={videoRef} className="aspect-video w-full object-cover" muted playsInline />
             </div>
           )}
-          <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-faint)]">
+          <p className="mt-3 text-[var(--fs-label)] leading-relaxed text-[var(--text-faint)]">
             Không có mã bên bạn? Nhờ máy kia tạo mã/link/QR rồi gửi sang. Sau khi gộp, hai máy sẽ
             giống nhau ở phần chung.
           </p>
         </div>
       </div>
 
-      <ul className="mt-4 space-y-1.5 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4 text-[11px] leading-relaxed text-[var(--text-muted)]">
+      <ul className="mt-4 space-y-1.5 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4 text-[var(--fs-label)] leading-relaxed text-[var(--text-muted)]">
         <li>
           <b className="text-[var(--text)]">Cách gộp:</b> từ đã thuộc = hợp hai máy · từ hay sai & lịch
           học = số lớn hơn · cài đặt = bản lưu gần nhất.

@@ -13,7 +13,7 @@ import kanjiList from "../data/kanji.json";
 import vocabList from "../data/vocab.json";
 import numbers from "../data/numbers.json";
 import { useProfile, setLesson, toggleKnown, record } from "../lib/progress.js";
-import { lessonById } from "../lib/roadmap.js";
+import { lessonById, grammarItemsFor } from "../lib/roadmap.js";
 import { useToast } from "../components/common/Toast.jsx";
 
 const toKata = (s) =>
@@ -68,11 +68,24 @@ function numItems(lesson) {
   }));
 }
 
+function grammarItems(lesson) {
+  return grammarItemsFor(lesson).map((g) => ({
+    id: String(g.id),
+    jp: g.pat,
+    name: g.name,
+    vi: g.mean,
+    ex: g.ex,
+    exvi: g.vi,
+    note: g.note,
+  }));
+}
+
 function buildItems(lesson) {
   if (lesson.kind === "kana") return kanaItems(lesson);
   if (lesson.kind === "kanji") return kanjiItems(lesson);
   if (lesson.kind === "vocab") return vocabItems(lesson);
   if (lesson.kind === "num") return numItems(lesson);
+  if (lesson.kind === "grammar") return grammarItems(lesson);
   return [];
 }
 
@@ -116,6 +129,19 @@ function buildQuiz(lesson, items) {
         options,
         answer,
         explain: `${it.jp} (${it.kana}) — ${it.vi}.`,
+      };
+    }
+    if (lesson.kind === "grammar") {
+      const pool = items.map((x) => x.jp);
+      const { options, answer } = makeOptions(it.jp, pool);
+      return {
+        section: "grammar",
+        key: it.id,
+        prompt: "Ví dụ này dùng cấu trúc nào?",
+        sub: it.ex,
+        options,
+        answer,
+        explain: `${it.jp} (${it.name}) — ${it.vi}`,
       };
     }
     const pool = items.map((x) => x.reading);
@@ -176,7 +202,14 @@ export default function Lesson({ lessonId, go }) {
   const steps = lesson.kind === "kana" ? KANA_STEPS : STEPS;
   const stepNow = steps.includes(step) ? step : "theory";
   const stepIdx = steps.indexOf(stepNow);
-  const knownKey = lesson.kind === "kanji" ? "kanji" : lesson.kind === "vocab" ? "vocab" : null;
+  const knownKey =
+    lesson.kind === "kanji"
+      ? "kanji"
+      : lesson.kind === "vocab"
+        ? "vocab"
+        : lesson.kind === "grammar"
+          ? "grammar"
+          : null;
 
   const markAllKnown = () => {
     items.forEach((it) => {
@@ -207,7 +240,7 @@ export default function Lesson({ lessonId, go }) {
             <h1 className="truncate text-[var(--fs-h2)] font-bold">{lesson.title}</h1>
             <LevelBadge level={lesson.level} />
           </div>
-          <p className="text-xs text-[var(--text-muted)]">
+          <p className="tabular text-xs text-[var(--text-muted)]">
             Bước {stepIdx + 1}/{steps.length} · {STEP_LABEL[stepNow]}
           </p>
         </div>
@@ -217,23 +250,55 @@ export default function Lesson({ lessonId, go }) {
       {stepNow === "theory" && (
         <div className="fade-in space-y-4">
           <p className="text-sm leading-relaxed text-[var(--text-muted)]">{lesson.summary}</p>
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-            {items.slice(0, 24).map((it) => (
-              <div
-                key={it.id}
-                className="flex flex-col items-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-1 py-3"
-              >
-                <span lang="ja" className="ja-display text-2xl font-bold text-[var(--text)]">
-                  {it.jp}
-                </span>
-                <span className="romaji mt-1 text-center leading-tight">
-                  {it.romaji || it.reading || it.h || ""}
-                </span>
-                <ListenButton text={it.jp} size="sm" className="mt-1.5" label={`Nghe ${it.jp}`} />
-              </div>
-            ))}
-          </div>
-          {items.length > 24 && (
+          {lesson.kind === "grammar" ? (
+            <ul className="space-y-2">
+              {items.map((it) => (
+                <li key={it.id}>
+                  <Card className="!p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span lang="ja" className="ja-display text-xl text-[var(--text)]">
+                        {it.jp}
+                      </span>
+                      <span className="text-sm font-semibold text-[var(--text)]">{it.name}</span>
+                      <span className="ml-auto">
+                        <ListenButton text={it.ex} size="sm" label={`Nghe ví dụ: ${it.ex}`} />
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-[var(--text-muted)]">{it.vi}</p>
+                    <p
+                      lang="ja"
+                      className="mt-1.5 text-[15px] text-[var(--text)]"
+                      style={{ fontFamily: "var(--font-ja)" }}
+                    >
+                      {it.ex}
+                    </p>
+                    <p className="text-sm text-[var(--text-muted)]">{it.exvi}</p>
+                    {it.note && (
+                      <p className="mt-1 text-xs leading-relaxed text-[var(--text-faint)]">↳ {it.note}</p>
+                    )}
+                  </Card>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+              {items.slice(0, 24).map((it) => (
+                <div
+                  key={it.id}
+                  className="flex flex-col items-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-1 py-3"
+                >
+                  <span lang="ja" className="ja-display text-2xl font-bold text-[var(--text)]">
+                    {it.jp}
+                  </span>
+                  <span className="romaji mt-1 text-center leading-tight">
+                    {it.romaji || it.reading || it.h || ""}
+                  </span>
+                  <ListenButton text={it.jp} size="sm" className="mt-1.5" label={`Nghe ${it.jp}`} />
+                </div>
+              ))}
+            </div>
+          )}
+          {lesson.kind !== "grammar" && items.length > 24 && (
             <p className="text-xs text-[var(--text-muted)]">
               Hiển thị 24/{items.length} mục — xem đầy đủ ở Thư viện.
             </p>
@@ -309,7 +374,7 @@ export default function Lesson({ lessonId, go }) {
       {stepNow === "result" && quizResult && (
         <Card className="fade-in !p-5">
           <ResultFlag ok={quizResult.score >= Math.ceil(quizResult.total * 0.6)} label={quizResult.score >= Math.ceil(quizResult.total * 0.6) ? "Hoàn thành bài" : "Cần ôn thêm"} />
-          <p className="mt-4 text-[var(--fs-h1)] font-bold">
+          <p className="display tabular mt-4">
             {quizResult.score}/{quizResult.total} câu đúng
           </p>
           <p className="mt-1 text-sm text-[var(--text-muted)]">

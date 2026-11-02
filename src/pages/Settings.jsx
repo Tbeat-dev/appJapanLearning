@@ -62,7 +62,7 @@ export default function Settings({ go }) {
   return (
     <div className="stagger mx-auto w-full max-w-xl space-y-5">
       <header>
-        <p className="text-[var(--fs-tiny)] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+        <p className="eyebrow eyebrow-rgb">
           Cài đặt
         </p>
         <h1 className="mt-1 text-[var(--fs-h1)] font-bold">Tùy chỉnh app</h1>
@@ -138,6 +138,24 @@ export default function Settings({ go }) {
               ))}
             </div>
           </div>
+          <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm">
+            <span>Hiệu ứng thành tựu</span>
+            <input
+              type="checkbox"
+              checked={!!s.achFx}
+              onChange={(e) => setSetting("achFx", e.target.checked)}
+              className="h-5 w-5 rounded-[var(--radius-sm)] border-[var(--border)]"
+            />
+          </label>
+          <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm">
+            <span>Âm thanh thành tựu</span>
+            <input
+              type="checkbox"
+              checked={!!s.achSfx}
+              onChange={(e) => setSetting("achSfx", e.target.checked)}
+              className="h-5 w-5 rounded-[var(--radius-sm)] border-[var(--border)]"
+            />
+          </label>
         </div>
       </Card>
 

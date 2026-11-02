@@ -10,6 +10,7 @@ import kanaGroups from "../data/kana.json";
 import kanjiList from "../data/kanji.json";
 import vocabList from "../data/vocab.json";
 import numbers from "../data/numbers.json";
+import grammarList from "../data/grammar.json";
 import { record } from "../lib/progress.js";
 
 const N = 20;
@@ -28,9 +29,9 @@ function kanaPool() {
 }
 
 function buildTest() {
-  const kanas = shuffle(kanaPool()).slice(0, 5);
-  const kanjis = shuffle(kanjiList.filter((k) => k.id < 500)).slice(0, 5);
-  const vocabs = shuffle(vocabList).slice(0, 5);
+  const kanas = shuffle(kanaPool()).slice(0, 4);
+  const kanjis = shuffle(kanjiList.filter((k) => k.id < 500)).slice(0, 4);
+  const vocabs = shuffle(vocabList).slice(0, 4);
   const dayEntries = Object.entries(numbers.DAYS);
   const nums = shuffle(
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({
@@ -38,10 +39,11 @@ function buildTest() {
       reading: numbers.D[n],
       vi: String(n),
     }))
-  ).slice(0, 3);
+  ).slice(0, 2);
   const days = shuffle(
     dayEntries.map(([n, reading]) => ({ jp: `${n}日`, reading, vi: `ngày ${n}` }))
   ).slice(0, 2);
+  const grammars = shuffle(grammarList).slice(0, 6);
 
   const qs = [];
 
@@ -106,6 +108,21 @@ function buildTest() {
     });
   });
 
+  grammars.forEach((g) => {
+    const pool = grammarList.map((x) => x.pat);
+    const { options, answer } = makeOptions(g.pat, pool);
+    qs.push({
+      section: "grammar",
+      sectionLabel: "Ngữ pháp",
+      prompt: "Ví dụ này dùng cấu trúc nào?",
+      sub: g.ex,
+      options,
+      answer,
+      explain: `${g.pat} (${g.name}) — ${g.mean}`,
+      key: String(g.id),
+    });
+  });
+
   return shuffle(qs).slice(0, N);
 }
 
@@ -156,20 +173,21 @@ export default function Test() {
       .map(([sec, v]) => ({ sec, ...v, acc: v.total ? v.ok / v.total : 0 }))
       .filter((x) => x.acc < 0.7)
       .sort((a, b) => a.acc - b.acc);
-    const labels = { kana: "Chữ cái", kanji: "Hán tự", vocab: "Từ vựng", num: "Số đếm" };
+    const labels = { kana: "Chữ cái", kanji: "Hán tự", vocab: "Từ vựng", num: "Số đếm", grammar: "Ngữ pháp" };
 
     return (
       <div className="stagger mx-auto w-full max-w-xl space-y-5">
         <header className="flex items-center gap-3">
           <Trophy aria-hidden="true" className="h-8 w-8 text-[var(--warning)]" />
           <div>
-            <h1 className="text-[var(--fs-h1)] font-bold">Kết quả bài luyện</h1>
+            <p className="eyebrow eyebrow-rgb">Luyện đề</p>
+            <h1 className="mt-0.5 text-[var(--fs-h1)] font-bold">Kết quả bài luyện</h1>
             <p className="text-sm text-[var(--text-muted)]">Điểm nội bộ, chỉ tham khảo — không phải chứng chỉ JLPT.</p>
           </div>
         </header>
 
         <Card>
-          <p className="text-[var(--fs-display)] font-bold text-[var(--brand)]">
+          <p className="display tabular text-[var(--brand)]">
             {result.score}/{result.total}
           </p>
           <ProgressBar value={result.score} max={result.total} label="Số câu đúng" className="mt-3" />
@@ -177,7 +195,7 @@ export default function Test() {
             {Object.entries(result.bySection).map(([sec, v]) => (
               <div key={sec} className="flex items-center justify-between text-sm">
                 <span className="text-[var(--text-muted)]">{labels[sec] || sec}</span>
-                <span className="font-semibold">
+                <span className="tabular font-semibold">
                   {v.ok}/{v.total}
                 </span>
               </div>
@@ -227,7 +245,7 @@ export default function Test() {
           <LevelBadge level="N5" />
         </div>
         <p className="mt-1.5 text-sm text-[var(--text-muted)]">
-          20 câu trắc nghiệm: chữ cái, hán tự, từ vựng, số đếm. Mỗi lần làm là một đề mới.
+          20 câu trắc nghiệm: chữ cái, hán tự, từ vựng, số đếm và ngữ pháp. Mỗi lần làm là một đề mới.
         </p>
       </header>
 

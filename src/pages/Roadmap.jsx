@@ -30,7 +30,7 @@ export default function Roadmap({ go }) {
   return (
     <div className="space-y-5">
       <header className="hero-in hero-in-1">
-        <p className="text-[var(--fs-tiny)] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+        <p className="eyebrow eyebrow-rgb">
           Lộ trình
         </p>
         <h1 className="mt-1 text-[var(--fs-h1)] font-bold">JLPT N5</h1>
@@ -41,7 +41,7 @@ export default function Roadmap({ go }) {
 
       {next && (
         <div className="hero-in hero-in-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--brand-soft)] p-4">
-          <p className="text-[var(--fs-tiny)] font-semibold uppercase tracking-wide text-[var(--brand)]">
+          <p className="eyebrow eyebrow-rgb">
             Tiếp theo
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -89,7 +89,7 @@ export default function Roadmap({ go }) {
                       <Check aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
                     ) : (
                       <span aria-hidden="true" className="text-sm font-bold">
-                        {l.kind === "kana" ? "あ" : l.kind === "kanji" ? "漢" : l.kind === "num" ? "数" : "語"}
+                        {l.kind === "kana" ? "あ" : l.kind === "kanji" ? "漢" : l.kind === "num" ? "数" : l.kind === "grammar" ? "文" : "語"}
                       </span>
                     )}
                   </span>

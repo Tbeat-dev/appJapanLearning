@@ -10,6 +10,7 @@ import { useProfile, markRemembered, record, flushPending, getP } from "../lib/p
 import kanaGroups from "../data/kana.json";
 import kanjiList from "../data/kanji.json";
 import vocabList from "../data/vocab.json";
+import grammarList from "../data/grammar.json";
 import numbers from "../data/numbers.json";
 
 const toKata = (s) =>
@@ -33,6 +34,7 @@ kanaGroups.forEach((g) => {
 
 const KANJI_MAP = Object.fromEntries(kanjiList.map((w) => [String(w.id), w]));
 const VOCAB_MAP = Object.fromEntries(vocabList.map((w) => [String(w.id), w]));
+const GRAMMAR_MAP = Object.fromEntries(grammarList.map((g) => [String(g.id), g]));
 
 function resolveWk(wk) {
   const i = wk.indexOf(":");
@@ -55,10 +57,15 @@ function resolveWk(wk) {
   if (sec === "num") {
     return { wk, sec, jp: id, sub: "", front: id, back: "Số đếm" };
   }
+  if (sec === "grammar") {
+    const g = GRAMMAR_MAP[id];
+    if (!g) return null;
+    return { wk, sec, jp: g.pat, sub: g.name, front: g.pat, back: g.mean };
+  }
   return null;
 }
 
-const SEC_LABEL = { kana: "Chữ cái", kanji: "Hán tự", vocab: "Từ vựng", num: "Số đếm" };
+const SEC_LABEL = { kana: "Chữ cái", kanji: "Hán tự", vocab: "Từ vựng", num: "Số đếm", grammar: "Ngữ pháp" };
 
 /**
  * Ôn tập — thẻ ghi nhớ từ danh sách từ hay sai. Lật thẻ, Chưa nhớ / Đã nhớ.
@@ -126,7 +133,7 @@ export default function Review({ go }) {
         <header>
           <h1 className="text-[var(--fs-h1)] font-bold">Ôn tập</h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Thẻ yếu được gộp từ kana, hán tự, từ vựng và số đếm.
+            Thẻ yếu được gộp từ kana, hán tự, từ vựng, số đếm và ngữ pháp.
           </p>
         </header>
         <EmptyState
@@ -142,9 +149,10 @@ export default function Review({ go }) {
   if (finished) {
     return (
       <div className="mx-auto w-full max-w-md space-y-5 text-center">
+        <p className="eyebrow eyebrow-rgb">Ôn tập</p>
         <h1 className="text-[var(--fs-h1)] font-bold">Xong phiên ôn tập</h1>
         <p className="text-sm text-[var(--text-muted)]">
-          Đã xử lý {doneCount}/{activeDeck.length} thẻ. Thẻ nhớ sẽ biến mất khỏi danh sách; thẻ chưa nhớ quay lại sau.
+          Đã xử lý <span className="tabular">{doneCount}/{activeDeck.length}</span> thẻ. Thẻ nhớ sẽ biến mất khỏi danh sách; thẻ chưa nhớ quay lại sau.
         </p>
         <Button onClick={() => go("#/")} className="w-full">
           Về Hôm nay
@@ -159,7 +167,7 @@ export default function Review({ go }) {
         <header>
           <h1 className="text-[var(--fs-h1)] font-bold">Ôn tập</h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Thẻ yếu được gộp từ kana, hán tự, từ vựng và số đếm.
+            Thẻ yếu được gộp từ kana, hán tự, từ vựng, số đếm và ngữ pháp.
           </p>
         </header>
         <Segmented
@@ -186,7 +194,7 @@ export default function Review({ go }) {
       <header className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-[var(--fs-h1)] font-bold">Ôn tập</h1>
-          <p className="text-xs text-[var(--text-muted)]">
+          <p className="tabular text-xs text-[var(--text-muted)]">
             Thẻ {i + 1}/{deck.length} · {SEC_LABEL[card.sec] || card.sec}
           </p>
         </div>

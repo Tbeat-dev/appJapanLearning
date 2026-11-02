@@ -39,14 +39,21 @@
   --font-ja: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
   --font-ja-display: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
 
-  /* 3.2 Thang cỡ chữ */
-  --fs-display: clamp(40px, 9vw, 56px);
-  --fs-h1: 28px;
-  --fs-h2: 22px;
+  /* 3.2 Thang cỡ chữ (clamp để tiêu đề vừa khung từ điện thoại tới desktop) */
+  --fs-display: clamp(44px, 9vw, 60px);
+  --fs-h1: clamp(26px, 4.4vw, 32px);
+  --fs-h2: clamp(21px, 3.4vw, 25px);
   --fs-h3: 18px;
   --fs-body: 16px;
   --fs-small: 14px;
   --fs-tiny: 12px;
+  --fs-label: 11px;
+
+  /* 3.3 Giãn chữ (tracking) cho thứ bậc văn bản */
+  --ls-display: -0.03em;
+  --ls-heading: -0.02em;
+  --ls-wide: 0.14em;
+  --ls-ja: 0.02em;
 
   /* 4 Khoảng cách, bo góc, đổ bóng */
   --radius-sm: 8px;

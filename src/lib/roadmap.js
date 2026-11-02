@@ -1,5 +1,7 @@
 // Lộ trình N5 — UI_DESIGN_RULES mục 10 "Lộ trình".
 
+import grammarList from "../data/grammar.json";
+
 export const LESSONS = [
   {
     id: "hira",
@@ -105,7 +107,52 @@ export const LESSONS = [
     after: "vocab1",
     summary: "Ăn uống, nhà cửa, thời gian",
   },
+  {
+    id: "grammar1",
+    level: "N5",
+    title: "Ngữ pháp: Trợ từ",
+    mins: 15,
+    kind: "grammar",
+    cats: ["Trợ từ"],
+    after: "vocab2",
+    summary: "〜は 〜が 〜に 〜で — ai làm gì, ở đâu, khi nào",
+  },
+  {
+    id: "grammar2",
+    level: "N5",
+    title: "Ngữ pháp: Cấu trúc câu",
+    mins: 12,
+    kind: "grammar",
+    cats: ["Cấu trúc câu"],
+    after: "grammar1",
+    summary: "〜です/ます, thể trần, 〜んです, 〜ましょう",
+  },
+  {
+    id: "grammar3",
+    level: "N5",
+    title: "Ngữ pháp: Động từ & tính từ",
+    mins: 20,
+    kind: "grammar",
+    cats: ["Động từ", "Tính từ"],
+    after: "grammar2",
+    summary: "Dạng て, 〜ない, 〜たい, 〜ている, 〜ながら",
+  },
+  {
+    id: "grammar4",
+    level: "N5",
+    title: "Ngữ pháp: Nối câu & so sánh",
+    mins: 12,
+    kind: "grammar",
+    cats: ["Nối câu", "So sánh"],
+    after: "grammar3",
+    summary: "〜から, 〜けど, 〜より, いちばん, 〜だけ",
+  },
 ];
+
+/** Các mục ngữ pháp thuộc bài học (lọc theo cats). */
+export function grammarItemsFor(lesson) {
+  return grammarList.filter((g) => (lesson.cats || []).includes(g.cat));
+}
 
 export const lessonById = (id) => LESSONS.find((l) => l.id === id);
 
@@ -141,6 +188,13 @@ export function lessonProgressRatio(p, lesson) {
     const known = (p.known && p.known.vocab) || {};
     for (let i = a; i < b; i++) if (known[i]) hit++;
     return hit / total;
+  }
+  if (lesson.kind === "grammar") {
+    const items = grammarItemsFor(lesson);
+    if (!items.length) return 0;
+    const known = (p.known && p.known.grammar) || {};
+    const hit = items.reduce((n, g) => n + (known[g.id] ? 1 : 0), 0);
+    return hit / items.length;
   }
   return 0;
 }

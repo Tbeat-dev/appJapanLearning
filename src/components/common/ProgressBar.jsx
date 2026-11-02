@@ -9,7 +9,7 @@ export default function ProgressBar({ value, max = 100, label, color, className 
       {(label || max > 0) && (
         <div className="mb-1 flex items-center justify-between text-[var(--fs-small)] text-[var(--text-muted)]">
           <span>{label}</span>
-          <span aria-hidden="true">
+          <span aria-hidden="true" className="tabular">
             {value}/{max}
           </span>
         </div>

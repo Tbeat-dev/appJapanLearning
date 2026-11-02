@@ -27,6 +27,10 @@ const counters = db
   }));
 const vocab = db.prepare("SELECT id, category AS cat, kanji, kana, meaning AS vi FROM vocab ORDER BY id").all().map((w) => ({ ...w, kanji: w.kanji || "" }));
 const topics = db.prepare("SELECT name, keywords FROM topics ORDER BY id").all();
+const grammar = db
+  .prepare("SELECT id, category AS cat, pattern AS pat, name, meaning AS mean, example AS ex, example_vi AS vi, note FROM grammar ORDER BY id")
+  .all()
+  .map((g) => ({ ...g, note: g.note ?? undefined }));
 
 db.close();
 
@@ -47,6 +51,7 @@ const files = {
   "numbers.json": num,
   "vocab.json": vocab,
   "topics.json": topics.map(({ name, keywords }) => ({ name, keywords })),
+  "grammar.json": grammar,
 };
 for (const [name, data] of Object.entries(files)) {
   writeFileSync(join(outDir, name), JSON.stringify(data), "utf8");

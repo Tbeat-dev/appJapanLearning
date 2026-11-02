@@ -13,7 +13,7 @@ function ProfileCard({ p, onLearn, onEdit, compact }) {
   return (
     <section className="fade-up overflow-hidden rounded-2xl border-2 border-[var(--text)] bg-[var(--text)] p-5 text-[var(--bg)] shadow-md">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-faint)]">Hồ sơ của bạn</h2>
+        <h2 className="eyebrow eyebrow-quiet text-[var(--text-faint)]">Hồ sơ của bạn</h2>
         {onEdit && (
           <button
             type="button"
@@ -101,7 +101,7 @@ export default function Profile({ onLearn, syncCode, onSyncConsumed }) {
 
           <section className="fade-up delay-1">
             <div className="mb-3 flex items-center gap-2">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">Tiến độ học tập</h2>
+              <h2 className="eyebrow eyebrow-quiet">Tiến độ học tập</h2>
               <div className="h-px flex-1 bg-[var(--surface-2)]" />
             </div>
             <Progress />

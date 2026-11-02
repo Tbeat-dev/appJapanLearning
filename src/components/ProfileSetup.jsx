@@ -52,7 +52,7 @@ function Section({ step, title, children, className = "" }) {
         className
       )}
     >
-      <h2 className="text-[var(--fs-tiny)] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+      <h2 className="eyebrow eyebrow-quiet">
         {step}
       </h2>
       <p className="mt-1 text-[var(--fs-h3)] font-bold text-[var(--text)]">{title}</p>
@@ -197,7 +197,7 @@ export default function ProfileSetup({ p, set, done, saved, onView, onLearn, act
                 </Button>
               </div>
             )}
-            {saved && <p className="mt-2 text-[11px] text-[var(--success)]">✓ Tự lưu trên máy bạn</p>}
+            {saved && <p className="mt-2 text-[var(--fs-label)] text-[var(--success)]">✓ Tự lưu trên máy bạn</p>}
           </div>
         ) : (
           <div className="rounded-[var(--radius-lg)] border border-dashed border-[var(--border)] bg-[var(--surface)] p-4 text-center">

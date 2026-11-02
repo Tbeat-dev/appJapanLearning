@@ -11,6 +11,7 @@ import kanaGroups from "../data/kana.json";
 import kanjiList from "../data/kanji.json";
 import vocabList from "../data/vocab.json";
 import numbers from "../data/counters.json";
+import grammarList from "../data/grammar.json";
 import { useProfile, toggleKnown } from "../lib/progress.js";
 
 const toKata = (s) =>
@@ -490,6 +491,144 @@ function VocabList() {
   );
 }
 
+/* ---------- Ngữ pháp ---------- */
+function GrammarList() {
+  const p = useProfile();
+  const [q, setQ] = useState("");
+  const [limit, setLimit] = useState(PAGE);
+  const [onlyUnknown, setOnlyUnknown] = useState(false);
+  const cats = useMemo(() => [...new Set(grammarList.map((g) => g.cat))], []);
+  const [cat, setCat] = useState("all");
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return grammarList.filter((g) => {
+      if (cat !== "all" && g.cat !== cat) return false;
+      if (onlyUnknown && p.known.grammar?.[g.id]) return false;
+      if (!needle) return true;
+      return (
+        g.pat.includes(q.trim()) ||
+        g.name.toLowerCase().includes(needle) ||
+        g.mean.toLowerCase().includes(needle) ||
+        g.vi.toLowerCase().includes(needle) ||
+        g.ex.includes(q.trim())
+      );
+    });
+  }, [q, cat, onlyUnknown, p.known.grammar]);
+
+  const shown = filtered.slice(0, limit);
+
+  return (
+    <div className="space-y-4">
+      <div className="relative">
+        <Search
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--text-faint)]"
+        />
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setLimit(PAGE);
+          }}
+          placeholder="Tìm cấu trúc, ví dụ, nghĩa…"
+          aria-label="Tìm ngữ pháp"
+          className="h-12 w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] pl-11 pr-3 text-[var(--fs-body)] outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
+        />
+      </div>
+
+      <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+        <Chip selected={cat === "all"} onClick={() => { setCat("all"); setLimit(PAGE); }}>
+          Tất cả
+        </Chip>
+        {cats.map((c) => (
+          <Chip key={c} selected={cat === c} onClick={() => { setCat(c); setLimit(PAGE); }}>
+            {c}
+          </Chip>
+        ))}
+      </div>
+
+      <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-[var(--text-muted)]">
+        <input
+          type="checkbox"
+          checked={onlyUnknown}
+          onChange={(e) => {
+            setOnlyUnknown(e.target.checked);
+            setLimit(PAGE);
+          }}
+          className="h-5 w-5 rounded-[var(--radius-sm)] border-[var(--border)]"
+        />
+        Chỉ hiện cấu trúc chưa đánh dấu
+      </label>
+
+      <p className="text-xs text-[var(--text-muted)]">
+        {filtered.length} cấu trúc · đang hiển thị {shown.length}
+      </p>
+
+      {filtered.length === 0 ? (
+        <EmptyState title="Không tìm thấy cấu trúc" hint="Thử từ khóa khác hoặc bỏ bộ lọc." />
+      ) : (
+        <ul className="stagger space-y-2">
+          {shown.map((g) => {
+            const known = !!p.known.grammar?.[g.id];
+            return (
+              <li key={g.id}>
+                <Card className="!flex !items-start !gap-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleKnown("grammar", g.id)}
+                    aria-pressed={known}
+                    aria-label={known ? `Bỏ đánh dấu ${g.name}` : `Đánh dấu đã nhớ ${g.name}`}
+                    className={
+                      known
+                        ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--success-soft)] text-[var(--success)]"
+                        : "flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-faint)]"
+                    }
+                  >
+                    {known ? "✓" : "＋"}
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span lang="ja" className="ja-display text-xl">
+                        {g.pat}
+                      </span>
+                      <span className="text-sm font-semibold text-[var(--text)]">{g.name}</span>
+                      <span className="ml-auto">
+                        <ListenButton text={g.ex} size="sm" label={`Nghe ví dụ: ${g.ex}`} />
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-[var(--text)]">{g.mean}</p>
+                    <p
+                      lang="ja"
+                      className="mt-2 text-[15px] text-[var(--text)]"
+                      style={{ fontFamily: "var(--font-ja)" }}
+                    >
+                      {g.ex}
+                    </p>
+                    <p className="text-sm text-[var(--text-muted)]">{g.vi}</p>
+                    {g.note && (
+                      <p className="mt-1.5 text-xs leading-relaxed text-[var(--text-faint)]">
+                        ↳ {g.note}
+                      </p>
+                    )}
+                  </div>
+                </Card>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {shown.length < filtered.length && (
+        <Button variant="secondary" className="w-full" onClick={() => setLimit((l) => l + PAGE)}>
+          Xem thêm {Math.min(PAGE, filtered.length - shown.length)} cấu trúc
+        </Button>
+      )}
+    </div>
+  );
+}
+
 /* ---------- Trang Thư viện ---------- */
 export default function Library({ sub, go }) {
   const tab = sub || "kana";
@@ -498,6 +637,7 @@ export default function Library({ sub, go }) {
     kanji: "Hán tự",
     num: "Số đếm",
     vocab: "Từ vựng",
+    grammar: "Ngữ pháp",
   };
 
   if (!titles[tab]) {
@@ -523,7 +663,7 @@ export default function Library({ sub, go }) {
           <ArrowLeft aria-hidden="true" className="h-5 w-5" />
         </button>
         <div>
-          <p className="text-[var(--fs-tiny)] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          <p className="eyebrow eyebrow-rgb">
             Thư viện
           </p>
           <h1 className="mt-0.5 text-[var(--fs-h1)] font-bold">{titles[tab]}</h1>
@@ -534,6 +674,7 @@ export default function Library({ sub, go }) {
       {tab === "kanji" && <KanjiList />}
       {tab === "num" && <CounterList />}
       {tab === "vocab" && <VocabList />}
+      {tab === "grammar" && <GrammarList />}
     </div>
   );
 }
@@ -545,11 +686,12 @@ export function LibraryIndex({ go }) {
     { id: "kanji", title: "Hán tự", desc: `${kanjiList.length.toLocaleString("vi-VN")} chữ · lọc N5/N4/N3`, icon: "漢" },
     { id: "num", title: "Số đếm", desc: "Số, người, đồ vật, ngày tháng", icon: "数" },
     { id: "vocab", title: "Từ vựng", desc: `${vocabList.length} từ N5 theo loại`, icon: "語" },
+    { id: "grammar", title: "Ngữ pháp", desc: `${grammarList.length} cấu trúc N5 · trợ từ, động từ, so sánh`, icon: "文" },
   ];
   return (
     <div className="space-y-5">
       <header>
-        <p className="text-[var(--fs-tiny)] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+        <p className="eyebrow eyebrow-rgb">
           Thư viện
         </p>
         <h1 className="mt-1 text-[var(--fs-h1)] font-bold">Nội dung N5</h1>
