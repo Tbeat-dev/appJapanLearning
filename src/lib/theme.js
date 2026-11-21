@@ -12,5 +12,5 @@ export function applyTheme(mode) {
     /* ignore */
   }
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", mode === "dark" ? "#121110" : "#F7F6F4");
+  if (meta) meta.setAttribute("content", mode === "dark" ? "#131211" : "#FAF9F7");
 }

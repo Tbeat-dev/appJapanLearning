@@ -5,13 +5,12 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    host: true,
-    port: 5173,
-    // Render đổi hostnames (vd: appjapanlearning-1.onrender.com) — cho phép mọi subdomain .onrender.com
-    allowedHosts: [".onrender.com"],
+    host: "0.0.0.0",
+    port: 3000,
+    allowedHosts: true,
   },
   preview: {
-    host: true,
-    port: 4173,
+    host: "0.0.0.0",
+    port: 3000,
   },
 });

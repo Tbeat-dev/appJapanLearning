@@ -17,18 +17,6 @@ import { useProfile } from "./lib/progress.js";
 import { applyTheme } from "./lib/theme.js";
 import { markTtsUnavailableClass } from "./lib/tts.js";
 
-/**
- * Router hash ổn định (chuỗi, không truyền object):
- *   #/                  Hôm nay
- *   #/roadmap           Lộ trình
- *   #/lesson/:id        Bài học
- *   #/review            Ôn tập
- *   #/test              Luyện đề
- *   #/library           Thư viện (chọn mục)
- *   #/library/:sub      kana | kanji | num | vocab | grammar
- *   #/settings          Cài đặt
- *   #/profile           Hồ sơ / thành tựu / sync
- */
 const parseHash = () => {
   const raw = window.location.hash.replace(/^#\/?/, "");
   const qi = raw.indexOf("?");
@@ -54,6 +42,12 @@ const navPage = (page) => {
   return page;
 };
 
+function hasAutostartFlag() {
+  if (typeof window === "undefined") return false;
+  const q = new URLSearchParams(window.location.search);
+  return q.get("autostart") === "1" || window.location.hash.includes("autostart=1");
+}
+
 function Screens({ route, go }) {
   switch (route.page) {
     case "roadmap":
@@ -77,7 +71,9 @@ function Screens({ route, go }) {
 
 export default function App() {
   const [route, setRoute] = useState(parseHash);
-  const [needProfile, setNeedProfile] = useState(() => !profileDone(loadProfile()));
+  const [needProfile, setNeedProfile] = useState(
+    () => !hasAutostartFlag() && !profileDone(loadProfile())
+  );
   const p = useProfile();
 
   useEffect(() => {
@@ -111,42 +107,16 @@ export default function App() {
     if (!route.sync) go("#/");
   };
 
-  const simpleChrome = route.page === "profile";
-
   return (
     <ToastProvider>
       <AchievementToast />
       {needProfile && <Onboarding onDone={finishOnboarding} />}
-      {simpleChrome ? (
-        <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
-          <div className="mx-auto max-w-3xl px-4 py-6 pb-24 sm:px-6">
-            <div className="mb-4 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => go("#/")}
-                className="min-h-11 rounded-[var(--radius-md)] px-3 text-sm font-semibold text-[var(--brand)] hover:underline"
-              >
-                ← Hôm nay
-              </button>
-              <button
-                type="button"
-                onClick={() => go("#/settings")}
-                className="ml-auto min-h-11 rounded-[var(--radius-md)] px-3 text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--brand)]"
-              >
-                Cài đặt
-              </button>
-            </div>
-            <Profile onLearn={() => go("#/roadmap")} syncCode={route.sync} onSyncConsumed={() => go("#/profile")} />
-          </div>
+      <AppShell page={navPage(route.page)}>
+        <div key={`${route.page}:${route.lessonId || ""}:${route.sub || ""}`} className="page-enter">
+          <Screens route={route} go={go} />
+          {route.page === "today" && <Footer />}
         </div>
-      ) : (
-        <AppShell page={navPage(route.page)}>
-          <div key={`${route.page}:${route.lessonId || ""}:${route.sub || ""}`} className="page-enter">
-            <Screens route={route} go={go} />
-            {route.page === "today" && <Footer />}
-          </div>
-        </AppShell>
-      )}
+      </AppShell>
     </ToastProvider>
   );
 }

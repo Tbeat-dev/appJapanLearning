@@ -5,19 +5,27 @@
 /* Map token → utility Tailwind (bg-brand, text-text-muted…). Component không viết mã màu trực tiếp. */
 @theme inline {
   --color-brand: var(--brand);
+  --color-brand-deep: var(--brand-deep);
   --color-brand-hover: var(--brand-hover);
   --color-brand-soft: var(--brand-soft);
+  --color-brand-fixed: var(--brand-fixed);
   --color-on-brand: var(--on-brand);
   --color-bg: var(--bg);
   --color-surface: var(--surface);
+  --color-surface-low: var(--surface-low);
   --color-surface-2: var(--surface-2);
+  --color-surface-high: var(--surface-high);
+  --color-surface-highest: var(--surface-highest);
   --color-edge: var(--border);
+  --color-outline: var(--outline);
   --color-ink: var(--text);
   --color-ink-muted: var(--text-muted);
   --color-ink-faint: var(--text-faint);
 
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
+  --color-success-fixed: var(--success-fixed);
+  --color-on-success-fixed: var(--on-success-fixed);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
   --color-danger: var(--danger);
@@ -35,11 +43,13 @@
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
 
   --shadow-1: var(--shadow-1);
   --shadow-2: var(--shadow-2);
 
   --font-sans: var(--font-ui);
+  --font-display: var(--font-display);
 }
 
 /* ===== Animations ===== */

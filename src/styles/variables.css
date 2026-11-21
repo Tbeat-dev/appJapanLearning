@@ -1,34 +1,45 @@
-/* Design tokens — UI_DESIGN_RULES.md mục 2–4. Không dùng giá trị ngoài file này. */
+/* Design tokens — Warm Wabi-Sabi paper, crimson seal, moss green. Light & Dark safe. */
 
 :root {
   color-scheme: light;
 
-  /* 2.1 Thương hiệu & giao diện (sáng) */
+  /* 2.1 Thương hiệu & bề mặt (sáng) */
   --brand: #C1121F;
-  --brand-hover: #A50F1A;
+  --brand-deep: #970012;
+  --brand-hover: #970012;
   --brand-soft: #FCE8EA;
+  --brand-fixed: #FFDAD6;
   --on-brand: #FFFFFF;
-  --bg: #F7F6F4;
+
+  --bg: #FAF9F7;
   --surface: #FFFFFF;
-  --surface-2: #F0EEEB;
-  --border: #E1DDD8;
-  --text: #1B1A19;
-  --text-muted: #5E5A55;
-  --text-faint: #8A857F;
+  --surface-low: #F4F3F1;
+  --surface-2: #EFEEEC;
+  --surface-high: #E9E8E6;
+  --surface-highest: #E3E2E0;
+  --border: #E5DDD8;
+  --outline: #906F6C;
+
+  --text: #1A1C1B;
+  --text-muted: #5C403D;
+  --text-faint: #8A7A76;
 
   /* 2.2 Màu ngữ nghĩa */
-  --success: #1E7A46;
-  --success-soft: #E3F3EA;
+  --success: #176B4B;
+  --success-soft: #EBF5F0;
+  --success-fixed: #A4F3CA;
+  --on-success-fixed: #002113;
+
   --warning: #8A5A00;
   --warning-soft: #FFF1D6;
-  --danger: #B42318;
-  --danger-soft: #FDE8E6;
+  --danger: #BA1A1A;
+  --danger-soft: #FFDAD6;
   --info: #1F5FAE;
   --info-soft: #E4EEFA;
 
   /* 2.3 Cấp độ JLPT */
-  --n5: #2E7D5B;
-  --n5-soft: #E3F3EA;
+  --n5: #176B4B;
+  --n5-soft: #EBF5F0;
   --n4: #1F5FAE;
   --n4-soft: #E4EEFA;
   --n3: #6B3FA0;
@@ -36,58 +47,68 @@
 
   /* 3.1 Phông chữ */
   --font-ui: "Be Vietnam Pro", system-ui, "Segoe UI", sans-serif;
+  --font-display: "Noto Serif", "Noto Serif JP", Georgia, serif;
   --font-ja: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
-  --font-ja-display: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --font-ja-display: "Noto Serif JP", "Noto Serif", "Hiragino Mincho ProN", serif;
 
-  /* 3.2 Thang cỡ chữ (clamp để tiêu đề vừa khung từ điện thoại tới desktop) */
-  --fs-display: clamp(44px, 9vw, 60px);
-  --fs-h1: clamp(26px, 4.4vw, 32px);
-  --fs-h2: clamp(21px, 3.4vw, 25px);
+  /* 3.2 Thang cỡ chữ */
+  --fs-display: clamp(44px, 8vw, 64px);
+  --fs-h1: clamp(24px, 3.8vw, 32px);
+  --fs-h2: clamp(20px, 3vw, 24px);
   --fs-h3: 18px;
-  --fs-body: 16px;
-  --fs-small: 14px;
+  --fs-body: 15px;
+  --fs-small: 13px;
   --fs-tiny: 12px;
   --fs-label: 11px;
 
-  /* 3.3 Giãn chữ (tracking) cho thứ bậc văn bản */
-  --ls-display: -0.03em;
-  --ls-heading: -0.02em;
-  --ls-wide: 0.14em;
+  /* 3.3 Giãn chữ (tracking) */
+  --ls-display: -0.025em;
+  --ls-heading: -0.015em;
+  --ls-wide: 0.12em;
   --ls-ja: 0.02em;
 
   /* 4 Khoảng cách, bo góc, đổ bóng */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
+  --radius-xl: 20px;
   --radius-full: 9999px;
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-1: 0 1px 3px rgba(26, 28, 27, 0.05), 0 1px 2px rgba(26, 28, 27, 0.03);
+  --shadow-2: 0 10px 26px rgba(26, 28, 27, 0.08);
 
-  /* 5.1 Thanh điều hướng dưới */
+  /* 5.1 Thanh điều hướng */
   --nav-h: 64px;
-
-  /* 5.1 Thanh trên cùng (điện thoại) — dùng cho label dính (sticky) */
-  --header-h: 61px;
+  --header-h: 60px;
 }
 
-/* 2.4 Chế độ tối — theo hệ thống, chỉ ghi đè khi không ép Sáng */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --brand: #E5484D;
+    --brand-deep: #FF8A85;
     --brand-hover: #F2555A;
     --brand-soft: #3A1518;
-    --on-brand: #1B1A19;
-    --bg: #121110;
-    --surface: #1C1B19;
-    --surface-2: #262421;
-    --border: #38352F;
-    --text: #F2EFEA;
-    --text-muted: #B5B0A8;
-    --text-faint: #8A857F;
+    --brand-fixed: #4A1C20;
+    --on-brand: #FFFFFF;
+
+    --bg: #131211;
+    --surface: #1D1B1A;
+    --surface-low: #23201E;
+    --surface-2: #282523;
+    --surface-high: #312D2A;
+    --surface-highest: #3B3632;
+    --border: #3B3631;
+    --outline: #A69591;
+
+    --text: #F4F1ED;
+    --text-muted: #C2B8B2;
+    --text-faint: #8E8580;
 
     --success: #5BC48A;
-    --success-soft: #14301F;
+    --success-soft: #143022;
+    --success-fixed: #1B432F;
+    --on-success-fixed: #A4F3CA;
+
     --warning: #E0A33C;
     --warning-soft: #3A2A08;
     --danger: #F27A72;
@@ -96,34 +117,44 @@
     --info-soft: #14243A;
 
     --n5: #5BC48A;
-    --n5-soft: #14301F;
+    --n5-soft: #143022;
     --n4: #6FA3E8;
     --n4-soft: #14243A;
     --n3: #B48AE0;
     --n3-soft: #2A1840;
 
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
-    --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.38);
+    --shadow-2: 0 10px 28px rgba(0, 0, 0, 0.48);
   }
 }
 
-/* Ép tối (cài đặt app) */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --brand: #E5484D;
+  --brand-deep: #FF8A85;
   --brand-hover: #F2555A;
   --brand-soft: #3A1518;
-  --on-brand: #1B1A19;
-  --bg: #121110;
-  --surface: #1C1B19;
-  --surface-2: #262421;
-  --border: #38352F;
-  --text: #F2EFEA;
-  --text-muted: #B5B0A8;
-  --text-faint: #8A857F;
+  --brand-fixed: #4A1C20;
+  --on-brand: #FFFFFF;
+
+  --bg: #131211;
+  --surface: #1D1B1A;
+  --surface-low: #23201E;
+  --surface-2: #282523;
+  --surface-high: #312D2A;
+  --surface-highest: #3B3632;
+  --border: #3B3631;
+  --outline: #A69591;
+
+  --text: #F4F1ED;
+  --text-muted: #C2B8B2;
+  --text-faint: #8E8580;
 
   --success: #5BC48A;
-  --success-soft: #14301F;
+  --success-soft: #143022;
+  --success-fixed: #1B432F;
+  --on-success-fixed: #A4F3CA;
+
   --warning: #E0A33C;
   --warning-soft: #3A2A08;
   --danger: #F27A72;
@@ -132,47 +163,57 @@
   --info-soft: #14243A;
 
   --n5: #5BC48A;
-  --n5-soft: #14301F;
+  --n5-soft: #143022;
   --n4: #6FA3E8;
   --n4-soft: #14243A;
   --n3: #B48AE0;
   --n3-soft: #2A1840;
 
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.38);
+  --shadow-2: 0 10px 28px rgba(0, 0, 0, 0.48);
 }
 
-/* Ép sáng (cài đặt app) — bỏ qua prefers-color-scheme */
 :root[data-theme="light"] {
   color-scheme: light;
   --brand: #C1121F;
-  --brand-hover: #A50F1A;
+  --brand-deep: #970012;
+  --brand-hover: #970012;
   --brand-soft: #FCE8EA;
+  --brand-fixed: #FFDAD6;
   --on-brand: #FFFFFF;
-  --bg: #F7F6F4;
-  --surface: #FFFFFF;
-  --surface-2: #F0EEEB;
-  --border: #E1DDD8;
-  --text: #1B1A19;
-  --text-muted: #5E5A55;
-  --text-faint: #8A857F;
 
-  --success: #1E7A46;
-  --success-soft: #E3F3EA;
+  --bg: #FAF9F7;
+  --surface: #FFFFFF;
+  --surface-low: #F4F3F1;
+  --surface-2: #EFEEEC;
+  --surface-high: #E9E8E6;
+  --surface-highest: #E3E2E0;
+  --border: #E5DDD8;
+  --outline: #906F6C;
+
+  --text: #1A1C1B;
+  --text-muted: #5C403D;
+  --text-faint: #8A7A76;
+
+  --success: #176B4B;
+  --success-soft: #EBF5F0;
+  --success-fixed: #A4F3CA;
+  --on-success-fixed: #002113;
+
   --warning: #8A5A00;
   --warning-soft: #FFF1D6;
-  --danger: #B42318;
-  --danger-soft: #FDE8E6;
+  --danger: #BA1A1A;
+  --danger-soft: #FFDAD6;
   --info: #1F5FAE;
   --info-soft: #E4EEFA;
 
-  --n5: #2E7D5B;
-  --n5-soft: #E3F3EA;
+  --n5: #176B4B;
+  --n5-soft: #EBF5F0;
   --n4: #1F5FAE;
   --n4-soft: #E4EEFA;
   --n3: #6B3FA0;
   --n3-soft: #EFE8F8;
 
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-1: 0 1px 3px rgba(26, 28, 27, 0.05), 0 1px 2px rgba(26, 28, 27, 0.03);
+  --shadow-2: 0 10px 26px rgba(26, 28, 27, 0.08);
 }

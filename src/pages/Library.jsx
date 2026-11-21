@@ -215,12 +215,12 @@ function KanjiList() {
       {filtered.length === 0 ? (
         <EmptyState title="Không tìm thấy chữ" hint="Thử từ khóa khác hoặc đổi bộ lọc cấp độ." />
       ) : (
-        <ul className="stagger space-y-2">
+        <ul className="stagger grid grid-cols-1 gap-3 lg:grid-cols-2">
           {shown.map((w) => {
             const known = !!p.known.kanji?.[w.id];
             return (
               <li key={w.id}>
-                <Card className="!flex !items-start !gap-3">
+                <Card className="!flex h-full !items-start !gap-3">
                   <button
                     type="button"
                     onClick={() => toggleKnown("kanji", w.id)}
@@ -228,8 +228,8 @@ function KanjiList() {
                     aria-label={known ? `Bỏ đánh dấu ${w.k}` : `Đánh dấu đã biết ${w.k}`}
                     className={
                       known
-                        ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--success-soft)] text-[var(--success)]"
-                        : "flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-faint)]"
+                        ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--success-soft)] text-[var(--success)]"
+                        : "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-faint)]"
                     }
                   >
                     {known ? "✓" : "＋"}
@@ -253,15 +253,15 @@ function KanjiList() {
                     </div>
                     <p className="mt-1 text-sm font-semibold text-[var(--text)]">{w.h} — {w.m}</p>
                     {w.mem && <p className="mt-0.5 text-xs text-[var(--text-muted)]">Mẹo nhớ: {w.mem}</p>}
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                    <div className="mt-2 flex flex-wrap gap-3 text-xs text-[var(--text-muted)]">
                       {w.on && (
-                        <span className="rounded-[var(--radius-full)] bg-[var(--info-soft)] px-2 py-0.5 text-[var(--info)]">
-                          <strong>ON</strong> {w.on}
+                        <span>
+                          <strong className="text-[var(--info)]">ON</strong> {w.on}
                         </span>
                       )}
                       {w.kun && (
-                        <span className="rounded-[var(--radius-full)] bg-[var(--warning-soft)] px-2 py-0.5 text-[var(--warning)]">
-                          <strong>KUN</strong> {w.kun}
+                        <span>
+                          <strong className="text-[var(--warning)]">KUN</strong> {w.kun}
                         </span>
                       )}
                     </div>
@@ -291,10 +291,10 @@ function CounterList() {
       <p className="text-sm text-[var(--text-muted)]">
         Ô cách đọc biến âm dùng nền vàng nhạt kèm ghi chú “Cách đọc đặc biệt”.
       </p>
-      <ul className="stagger space-y-3">
+      <ul className="stagger grid grid-cols-1 gap-3 lg:grid-cols-2">
         {numbers.map((c) => (
           <li key={c.id}>
-            <Card>
+            <Card className="h-full">
               <div className="flex flex-wrap items-center gap-2">
                 <span lang="ja" className="ja-display text-2xl font-bold">{c.n}</span>
                 {c.r && <span className="romaji">({c.r})</span>}
@@ -307,13 +307,13 @@ function CounterList() {
                 </p>
               )}
               {c.sp && (
-                <div className="mt-3 grid grid-cols-5 gap-2 sm:grid-cols-10">
+                <div className="mt-3 grid grid-cols-5 gap-2">
                   {c.sp.map((s, i) => (
                     <div
                       key={i}
-                      className="flex flex-col items-center rounded-[var(--radius-sm)] bg-[var(--surface-2)] px-1 py-2"
+                      className="flex flex-col items-center rounded-lg bg-[var(--surface-2)] px-1 py-2"
                     >
-                      <span className="text-sm font-bold">{i + 1}</span>
+                      <span className="tabular text-sm font-bold">{i + 1}</span>
                       <span lang="ja" className="text-xs" style={{ fontFamily: "var(--font-ja)" }}>{s}</span>
                     </div>
                   ))}
@@ -323,7 +323,7 @@ function CounterList() {
                 <ul className="mt-3 space-y-1 text-sm">
                   {Object.entries(c.d).map(([k, v]) => (
                     <li key={k} className="flex items-center gap-2">
-                      <span className="w-8 text-right font-semibold">{k}</span>
+                      <span className="tabular w-8 text-right font-semibold">{k}</span>
                       <span lang="ja" style={{ fontFamily: "var(--font-ja)" }}>{v}</span>
                     </li>
                   ))}
@@ -444,11 +444,11 @@ function VocabList() {
       {filtered.length === 0 ? (
         <EmptyState title="Không có từ phù hợp" hint="Bỏ bớt bộ lọc hoặc đổi từ khóa." />
       ) : (
-        <ul className="stagger divide-y divide-[var(--border)] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]">
+        <ul className="stagger grid grid-cols-1 gap-2.5 md:grid-cols-2">
           {shown.map((v) => {
             const known = !!p.known.vocab?.[v.id];
             return (
-              <li key={v.id} className="flex items-center gap-2 px-4 py-3">
+              <li key={v.id} className="flex items-center gap-3 rounded-2xl border border-[var(--border)]/80 bg-[var(--surface)] px-4 py-3 shadow-[var(--shadow-1)]">
                 <button
                   type="button"
                   onClick={() => toggleKnown("vocab", v.id)}
@@ -456,18 +456,18 @@ function VocabList() {
                   aria-label={known ? `Bỏ đánh dấu ${v.vi}` : `Đánh dấu đã biết ${v.vi}`}
                   className={
                     known
-                      ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--success-soft)] text-[var(--success)]"
-                      : "flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--border)] text-[var(--text-faint)]"
+                      ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--success-soft)] text-[var(--success)]"
+                      : "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] text-[var(--text-faint)]"
                   }
                 >
                   {known ? "✓" : "＋"}
                 </button>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-x-2">
-                    <span className="text-[17px] font-semibold text-[var(--text)]">{v.vi}</span>
+                    <span className="text-[16px] font-semibold text-[var(--text)]">{v.vi}</span>
                     {v.cat && (
-                      <span className="rounded-[var(--radius-full)] bg-[var(--surface-2)] px-2 py-0.5 text-[var(--fs-tiny)] text-[var(--text-muted)]">
-                        {v.cat}
+                      <span className="text-xs text-[var(--text-faint)]">
+                        · {v.cat}
                       </span>
                     )}
                   </div>
@@ -569,12 +569,12 @@ function GrammarList() {
       {filtered.length === 0 ? (
         <EmptyState title="Không tìm thấy cấu trúc" hint="Thử từ khóa khác hoặc bỏ bộ lọc." />
       ) : (
-        <ul className="stagger space-y-2">
+        <ul className="stagger grid grid-cols-1 gap-3 lg:grid-cols-2">
           {shown.map((g) => {
             const known = !!p.known.grammar?.[g.id];
             return (
               <li key={g.id}>
-                <Card className="!flex !items-start !gap-3">
+                <Card className="!flex h-full !items-start !gap-3">
                   <button
                     type="button"
                     onClick={() => toggleKnown("grammar", g.id)}
@@ -582,8 +582,8 @@ function GrammarList() {
                     aria-label={known ? `Bỏ đánh dấu ${g.name}` : `Đánh dấu đã nhớ ${g.name}`}
                     className={
                       known
-                        ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--success-soft)] text-[var(--success)]"
-                        : "flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-faint)]"
+                        ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--success-soft)] text-[var(--success)]"
+                        : "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-faint)]"
                     }
                   >
                     {known ? "✓" : "＋"}
@@ -658,17 +658,23 @@ export default function Library({ sub, go }) {
           type="button"
           onClick={() => go("#/library")}
           aria-label="Quay lại thư viện"
-          className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--brand)] lg:hidden"
+          className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--brand)]"
         >
           <ArrowLeft aria-hidden="true" className="h-5 w-5" />
         </button>
         <div>
-          <p className="eyebrow eyebrow-rgb">
-            Thư viện
-          </p>
-          <h1 className="mt-0.5 text-[var(--fs-h1)] font-bold">{titles[tab]}</h1>
+          <p className="eyebrow text-[var(--brand-deep)]">Thư viện</p>
+          <h1 className="font-display mt-0.5 text-[var(--fs-h1)] font-semibold">{titles[tab]}</h1>
         </div>
       </header>
+
+      <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+        {Object.entries(titles).map(([id, label]) => (
+          <Chip key={id} selected={tab === id} onClick={() => go(`#/library/${id}`)}>
+            {label}
+          </Chip>
+        ))}
+      </div>
 
       {tab === "kana" && <KanaBoard />}
       {tab === "kanji" && <KanjiList />}
@@ -691,22 +697,20 @@ export function LibraryIndex({ go }) {
   return (
     <div className="space-y-5">
       <header>
-        <p className="eyebrow eyebrow-rgb">
-          Thư viện
-        </p>
-        <h1 className="mt-1 text-[var(--fs-h1)] font-bold">Nội dung N5</h1>
+        <p className="eyebrow text-[var(--brand-deep)]">Thư viện</p>
+        <h1 className="font-display mt-1 text-[var(--fs-h1)] font-semibold">Nội dung N5</h1>
       </header>
-          <ul className="stagger grid gap-3 sm:grid-cols-2">
+      <ul className="stagger grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((it) => (
           <li key={it.id}>
             <button
               type="button"
               onClick={() => go(`#/library/${it.id}`)}
-              className="flex w-full items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-4 text-left shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]"
+              className="flex h-full w-full items-center gap-3.5 rounded-2xl border border-[var(--border)]/80 bg-[var(--surface)] p-4 text-left shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:border-[var(--brand)] hover:shadow-[var(--shadow-2)]"
             >
               <span
                 aria-hidden="true"
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--brand-soft)] text-xl font-bold text-[var(--brand)]"
+                className="font-display flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-xl font-bold text-[var(--brand-deep)]"
               >
                 {it.icon}
               </span>

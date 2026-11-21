@@ -60,139 +60,145 @@ export default function Settings({ go }) {
   };
 
   return (
-    <div className="stagger mx-auto w-full max-w-xl space-y-5">
+    <div className="stagger mx-auto w-full max-w-4xl space-y-5">
       <header>
-        <p className="eyebrow eyebrow-rgb">
+        <p className="eyebrow text-[var(--brand-deep)]">
           Cài đặt
         </p>
-        <h1 className="mt-1 text-[var(--fs-h1)] font-bold">Tùy chỉnh app</h1>
+        <h1 className="font-display mt-1 text-[var(--fs-h1)] font-semibold">Tùy chỉnh app</h1>
       </header>
 
-      <Card>
-        <h2 className="text-[var(--fs-h3)] font-semibold">Giao diện</h2>
-        <p className="mt-1 text-sm text-[var(--text-muted)]">Chế độ sáng/tối của toàn app.</p>
-        <Segmented
-          className="mt-3"
-          ariaLabel="Chế độ sáng tối"
-          value={theme}
-          onChange={onTheme}
-          options={[
-            { value: "light", label: "Sáng" },
-            { value: "dark", label: "Tối" },
-            { value: "system", label: "Hệ thống" },
-          ]}
-        />
-        <div className="mt-2 flex gap-4 text-[var(--text-faint)]" aria-hidden="true">
-          <Sun className="h-4 w-4" /> <Moon className="h-4 w-4" /> <Monitor className="h-4 w-4" />
-        </div>
-      </Card>
-
-      <Card>
-        <h2 className="text-[var(--fs-h3)] font-semibold">Học tập</h2>
-        <div className="mt-3 space-y-3">
-          <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm">
-            <span className="inline-flex items-center gap-2">
-              {s.furigana ? <Eye aria-hidden="true" className="h-4 w-4" /> : <EyeOff aria-hidden="true" className="h-4 w-4" />}
-              Hiển thị furigana
-            </span>
-            <input
-              type="checkbox"
-              checked={s.furigana !== false}
-              onChange={(e) => setSetting("furigana", e.target.checked)}
-              className="h-5 w-5 rounded-[var(--radius-sm)] border-[var(--border)]"
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-start">
+        <div className="space-y-4">
+          <Card>
+            <h2 className="text-[var(--fs-h3)] font-semibold">Giao diện</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Chế độ sáng/tối của toàn app.</p>
+            <Segmented
+              className="mt-3"
+              ariaLabel="Chế độ sáng tối"
+              value={theme}
+              onChange={onTheme}
+              options={[
+                { value: "light", label: "Sáng" },
+                { value: "dark", label: "Tối" },
+                { value: "system", label: "Hệ thống" },
+              ]}
             />
-          </label>
-          <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm">
-            <span className="inline-flex items-center gap-2">
-              {s.sound ? <Volume2 aria-hidden="true" className="h-4 w-4" /> : <VolumeX aria-hidden="true" className="h-4 w-4" />}
-              Âm thanh phát âm
-              {!ttsAvailable() && (
-                <span className="text-[var(--fs-tiny)] text-[var(--text-faint)]">(trình duyệt không hỗ trợ)</span>
-              )}
-            </span>
-            <input
-              type="checkbox"
-              checked={!!s.sound}
-              onChange={(e) => setSetting("sound", e.target.checked)}
-              className="h-5 w-5 rounded-[var(--radius-sm)] border-[var(--border)]"
-              disabled={!ttsAvailable()}
-            />
-          </label>
-          <div>
-            <p className="text-sm font-medium">Mục tiêu học mỗi ngày (lượt)</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {DAY_GOALS.map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  onClick={() => setSetting("goal", g)}
-                  aria-pressed={s.goal === g}
-                  className={
-                    s.goal === g
-                      ? "min-h-11 rounded-[var(--radius-md)] bg-[var(--brand)] px-4 text-sm font-semibold text-[var(--on-brand)]"
-                      : "min-h-11 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-semibold text-[var(--text-muted)]"
-                  }
-                >
-                  {g} lượt
-                </button>
-              ))}
+            <div className="mt-2 flex gap-4 text-[var(--text-faint)]" aria-hidden="true">
+              <Sun className="h-4 w-4" /> <Moon className="h-4 w-4" /> <Monitor className="h-4 w-4" />
             </div>
-          </div>
-          <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm">
-            <span>Hiệu ứng thành tựu</span>
-            <input
-              type="checkbox"
-              checked={!!s.achFx}
-              onChange={(e) => setSetting("achFx", e.target.checked)}
-              className="h-5 w-5 rounded-[var(--radius-sm)] border-[var(--border)]"
-            />
-          </label>
-          <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm">
-            <span>Âm thanh thành tựu</span>
-            <input
-              type="checkbox"
-              checked={!!s.achSfx}
-              onChange={(e) => setSetting("achSfx", e.target.checked)}
-              className="h-5 w-5 rounded-[var(--radius-sm)] border-[var(--border)]"
-            />
-          </label>
-        </div>
-      </Card>
+          </Card>
 
-      <Card>
-        <h2 className="text-[var(--fs-h3)] font-semibold">Dữ liệu</h2>
-        <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Tiến độ lưu trên máy này. Xuất file để sao lưu hoặc chuyển thiết bị.
-        </p>
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-          <Button variant="secondary" onClick={onExport} className="flex-1">
-            <Download aria-hidden="true" className="h-4 w-4" /> Xuất dữ liệu
-          </Button>
-          <Button variant="secondary" onClick={onPickFile} className="flex-1">
-            <Upload aria-hidden="true" className="h-4 w-4" /> Nhập dữ liệu
-          </Button>
+          <Card>
+            <h2 className="text-[var(--fs-h3)] font-semibold">Học tập</h2>
+            <div className="mt-3 space-y-3">
+              <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm">
+                <span className="inline-flex items-center gap-2">
+                  {s.furigana ? <Eye aria-hidden="true" className="h-4 w-4" /> : <EyeOff aria-hidden="true" className="h-4 w-4" />}
+                  Hiển thị furigana
+                </span>
+                <input
+                  type="checkbox"
+                  checked={s.furigana !== false}
+                  onChange={(e) => setSetting("furigana", e.target.checked)}
+                  className="h-5 w-5 rounded-[var(--radius-sm)] border-[var(--border)]"
+                />
+              </label>
+              <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm">
+                <span className="inline-flex items-center gap-2">
+                  {s.sound ? <Volume2 aria-hidden="true" className="h-4 w-4" /> : <VolumeX aria-hidden="true" className="h-4 w-4" />}
+                  Âm thanh phát âm
+                  {!ttsAvailable() && (
+                    <span className="text-[var(--fs-tiny)] text-[var(--text-faint)]">(trình duyệt không hỗ trợ)</span>
+                  )}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={!!s.sound}
+                  onChange={(e) => setSetting("sound", e.target.checked)}
+                  className="h-5 w-5 rounded-[var(--radius-sm)] border-[var(--border)]"
+                  disabled={!ttsAvailable()}
+                />
+              </label>
+              <div>
+                <p className="text-sm font-medium">Mục tiêu học mỗi ngày (lượt)</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {DAY_GOALS.map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setSetting("goal", g)}
+                      aria-pressed={s.goal === g}
+                      className={
+                        s.goal === g
+                          ? "min-h-11 rounded-xl bg-[var(--brand)] px-4 text-sm font-semibold text-[var(--on-brand)]"
+                          : "min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-semibold text-[var(--text-muted)]"
+                      }
+                    >
+                      {g} lượt
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm">
+                <span>Hiệu ứng thành tựu</span>
+                <input
+                  type="checkbox"
+                  checked={!!s.achFx}
+                  onChange={(e) => setSetting("achFx", e.target.checked)}
+                  className="h-5 w-5 rounded-[var(--radius-sm)] border-[var(--border)]"
+                />
+              </label>
+              <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm">
+                <span>Âm thanh thành tựu</span>
+                <input
+                  type="checkbox"
+                  checked={!!s.achSfx}
+                  onChange={(e) => setSetting("achSfx", e.target.checked)}
+                  className="h-5 w-5 rounded-[var(--radius-sm)] border-[var(--border)]"
+                />
+              </label>
+            </div>
+          </Card>
         </div>
-        <input ref={fileRef} type="file" accept="application/json,.json" className="sr-only" onChange={onFile} />
-        <Button
-          variant="text"
-          className="mt-3 w-full text-[var(--danger)]"
-          onClick={() => setConfirmReset(true)}
-        >
-          <Trash2 aria-hidden="true" className="h-4 w-4" /> Đặt lại toàn bộ tiến độ
-        </Button>
-      </Card>
 
-      <Card>
-        <h2 className="text-[var(--fs-h3)] font-semibold">Khác</h2>
-        <div className="mt-2 flex flex-col gap-2">
-          <Button variant="secondary" onClick={() => go("#/profile")}>
-            Hồ sơ &amp; đồng bộ
-          </Button>
-          <Button variant="secondary" onClick={() => go("#/profile")}>
-            Thành tựu
-          </Button>
+        <div className="space-y-4">
+          <Card>
+            <h2 className="text-[var(--fs-h3)] font-semibold">Dữ liệu</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Tiến độ lưu trên máy này. Xuất file để sao lưu hoặc chuyển thiết bị.
+            </p>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <Button variant="secondary" onClick={onExport} className="flex-1">
+                <Download aria-hidden="true" className="h-4 w-4" /> Xuất dữ liệu
+              </Button>
+              <Button variant="secondary" onClick={onPickFile} className="flex-1">
+                <Upload aria-hidden="true" className="h-4 w-4" /> Nhập dữ liệu
+              </Button>
+            </div>
+            <input ref={fileRef} type="file" accept="application/json,.json" className="sr-only" onChange={onFile} />
+            <Button
+              variant="text"
+              className="mt-3 w-full text-[var(--danger)]"
+              onClick={() => setConfirmReset(true)}
+            >
+              <Trash2 aria-hidden="true" className="h-4 w-4" /> Đặt lại toàn bộ tiến độ
+            </Button>
+          </Card>
+
+          <Card>
+            <h2 className="text-[var(--fs-h3)] font-semibold">Khác</h2>
+            <div className="mt-3 flex flex-col gap-2">
+              <Button variant="secondary" onClick={() => go("#/profile")}>
+                Hồ sơ &amp; đồng bộ
+              </Button>
+              <Button variant="secondary" onClick={() => go("#/profile")}>
+                Thành tựu
+              </Button>
+            </div>
+          </Card>
         </div>
-      </Card>
+      </div>
 
       <ConfirmDialog
         open={confirmReset}

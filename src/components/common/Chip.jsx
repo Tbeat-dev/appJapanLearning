@@ -1,16 +1,16 @@
 const cx = (...a) => a.filter(Boolean).join(" ");
 
-/** Chip lọc: viên thuốc; chọn thì nền brand chữ trắng. */
+/** Chip lọc tương tác: chọn thì nền brand chữ trắng. */
 export function Chip({ selected, children, className = "", ...rest }) {
   return (
     <button
       type="button"
       aria-pressed={!!selected}
       className={cx(
-        "inline-flex h-9 shrink-0 items-center rounded-[var(--radius-full)] border px-3.5 text-sm font-medium transition duration-150",
+        "inline-flex min-h-10 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-4 py-1.5 text-[13px] transition-colors duration-150",
         selected
-          ? "border-transparent bg-[var(--brand)] text-[var(--on-brand)]"
-          : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]",
+          ? "bg-[var(--brand-deep)] font-semibold text-[var(--on-brand)] shadow-[var(--shadow-1)]"
+          : "bg-[var(--surface-2)] font-medium text-[var(--text-muted)] hover:bg-[var(--surface-high)] hover:text-[var(--text)]",
         className
       )}
       {...rest}
@@ -26,12 +26,12 @@ const LEVEL = {
   N3: "bg-[var(--n3-soft)] text-[var(--n3)]",
 };
 
-/** Nhãn cấp độ JLPT — chỉ dùng màu N5/N4/N3. */
+/** Nhãn cấp độ JLPT gọn — không viền dày. */
 export function LevelBadge({ level = "N5", className = "" }) {
   return (
     <span
       className={cx(
-        "inline-flex items-center rounded-[var(--radius-full)] px-2 py-0.5 text-[var(--fs-tiny)] font-semibold",
+        "inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold tracking-wide",
         LEVEL[level] || LEVEL.N5,
         className
       )}
@@ -48,7 +48,7 @@ export function Segmented({ options, value, onChange, className = "", ariaLabel 
       role="tablist"
       aria-label={ariaLabel}
       className={cx(
-        "no-scrollbar flex gap-1 overflow-x-auto rounded-[var(--radius-md)] bg-[var(--surface-2)] p-1",
+        "no-scrollbar inline-flex max-w-full gap-1 overflow-x-auto rounded-xl bg-[var(--surface-2)] p-1",
         className
       )}
     >
@@ -62,7 +62,7 @@ export function Segmented({ options, value, onChange, className = "", ariaLabel 
             aria-selected={on}
             onClick={() => onChange(o.value)}
             className={cx(
-              "min-h-10 shrink-0 rounded-[var(--radius-sm)] px-3.5 text-sm font-semibold transition duration-150",
+              "min-h-10 shrink-0 whitespace-nowrap rounded-lg px-4 text-sm font-semibold transition duration-150",
               on
                 ? "bg-[var(--surface)] text-[var(--brand)] shadow-[var(--shadow-1)]"
                 : "text-[var(--text-muted)] hover:text-[var(--text)]"

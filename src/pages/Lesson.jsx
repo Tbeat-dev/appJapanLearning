@@ -62,8 +62,8 @@ function numItems(lesson) {
   }
   return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({
     id: `n-${n}`,
-    jp: numbers.KD[n] || String(n),
-    reading: numbers.D[n],
+    jp: numbers.KD[n] || (n === 10 ? "十" : String(n)),
+    reading: numbers.D[n] || (n === 10 ? "じゅう" : ""),
     vi: String(n),
   }));
 }
@@ -225,19 +225,19 @@ export default function Lesson({ lessonId, go }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
+    <div className="mx-auto w-full max-w-4xl">
       <div className="mb-4 flex items-center gap-3">
         <button
           type="button"
           onClick={() => go("#/roadmap")}
           aria-label="Quay lại lộ trình"
-          className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--brand)]"
+          className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--brand)]"
         >
           <ArrowLeft aria-hidden="true" className="h-5 w-5" />
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-[var(--fs-h2)] font-bold">{lesson.title}</h1>
+            <h1 className="font-display truncate text-[var(--fs-h2)] font-semibold">{lesson.title}</h1>
             <LevelBadge level={lesson.level} />
           </div>
           <p className="tabular text-xs text-[var(--text-muted)]">
@@ -251,10 +251,10 @@ export default function Lesson({ lessonId, go }) {
         <div className="fade-in space-y-4">
           <p className="text-sm leading-relaxed text-[var(--text-muted)]">{lesson.summary}</p>
           {lesson.kind === "grammar" ? (
-            <ul className="space-y-2">
+            <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {items.map((it) => (
                 <li key={it.id}>
-                  <Card className="!p-3">
+                  <Card className="h-full !p-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <span lang="ja" className="ja-display text-xl text-[var(--text)]">
                         {it.jp}
@@ -281,11 +281,11 @@ export default function Lesson({ lessonId, go }) {
               ))}
             </ul>
           ) : (
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5 lg:grid-cols-6">
               {items.slice(0, 24).map((it) => (
                 <div
                   key={it.id}
-                  className="flex flex-col items-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-1 py-3"
+                  className="flex flex-col items-center rounded-xl border border-[var(--border)] bg-[var(--surface)] px-1 py-3"
                 >
                   <span lang="ja" className="ja-display text-2xl font-bold text-[var(--text)]">
                     {it.jp}

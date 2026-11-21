@@ -40,6 +40,19 @@ body {
     text-wrap: pretty;
   }
 
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  button {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
   ::selection {
     background-color: var(--brand);
     color: var(--on-brand);
@@ -47,20 +60,22 @@ body {
 }
 
 @layer components {
-  /* Nhãn nhỏ chữ hoa — eyebrow/section label thống nhất toàn app.
-     Mặc định đỏ mộc (--brand) như con dấu: chỉ dùng cho nhãn cấp trang.
-     Nhãn trong card dùng .eyebrow-quiet (xám). */
+  /* Nhãn nhỏ chữ hoa — eyebrow/section label thống nhất toàn app. */
   .eyebrow {
     font-size: var(--fs-label);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: var(--ls-wide);
     line-height: 1.4;
-    color: var(--brand);
+    color: var(--brand-deep);
   }
 
   .eyebrow-quiet {
-    color: var(--text-muted);
+    color: var(--outline);
+  }
+
+  .font-display {
+    font-family: var(--font-display);
   }
 
   /* Gradient RGB chảy (đỏ → xanh lá → xanh dương) — chỉ gắn kèm .eyebrow
@@ -117,19 +132,6 @@ body {
   to {
     filter: hue-rotate(360deg);
   }
-}
-
-button,
-input,
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-}
-
-button {
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
 }
 
 /* 12 — vòng focus rõ ràng, cấm outline:none không thay thế */
